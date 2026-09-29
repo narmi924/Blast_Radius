@@ -1,0 +1,4 @@
+NORMAL_DELETE_RESULT status=no operations applied operations=0 plan=conflict exists=False length=null content=null attributes=null
+PASS Normal deleted file refuses before target creation
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0
+TEST_EXIT=0

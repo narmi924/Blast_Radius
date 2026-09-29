@@ -1,0 +1,607 @@
+[
+  {
+    "status": "PASS",
+    "test": "ntfs primitives",
+    "raw": "PASS ntfs primitives"
+  },
+  {
+    "status": "PASS",
+    "test": "modified file full chain and idempotence",
+    "raw": "PASS modified file full chain and idempotence"
+  },
+  {
+    "status": "PASS",
+    "test": "modified file conflict",
+    "raw": "PASS modified file conflict"
+  },
+  {
+    "status": "PASS",
+    "test": "equal content with changed identity conflicts",
+    "raw": "PASS equal content with changed identity conflicts"
+  },
+  {
+    "status": "PASS",
+    "test": "new file removal and safety copy",
+    "raw": "PASS new file removal and safety copy"
+  },
+  {
+    "status": "PASS",
+    "test": "zero-byte new file is present",
+    "raw": "PASS zero-byte new file is present"
+  },
+  {
+    "status": "PASS",
+    "test": "new file conflict",
+    "raw": "PASS new file conflict"
+  },
+  {
+    "status": "PASS",
+    "test": "deleted file recovery",
+    "raw": "PASS deleted file recovery"
+  },
+  {
+    "status": "PASS",
+    "test": "deleted path occupied",
+    "raw": "PASS deleted path occupied"
+  },
+  {
+    "status": "PASS",
+    "test": "simple rename recovery",
+    "raw": "PASS simple rename recovery"
+  },
+  {
+    "status": "PASS",
+    "test": "rename source occupied",
+    "raw": "PASS rename source occupied"
+  },
+  {
+    "status": "PASS",
+    "test": "missing baseline object",
+    "raw": "PASS missing baseline object"
+  },
+  {
+    "status": "PASS",
+    "test": "corrupt baseline object",
+    "raw": "PASS corrupt baseline object"
+  },
+  {
+    "status": "PASS",
+    "test": "corrupt safety object blocks mutation",
+    "raw": "PASS corrupt safety object blocks mutation"
+  },
+  {
+    "status": "PASS",
+    "test": "name exchange is unsupported",
+    "raw": "PASS name exchange is unsupported"
+  },
+  {
+    "status": "PASS",
+    "test": "missing parent is unknown",
+    "raw": "PASS missing parent is unknown"
+  },
+  {
+    "status": "PASS",
+    "test": "fake token never enters persistent plaintext",
+    "raw": "PASS fake token never enters persistent plaintext"
+  },
+  {
+    "status": "PASS",
+    "test": "new token safety copy stays encrypted",
+    "raw": "PASS new token safety copy stays encrypted"
+  },
+  {
+    "status": "PASS",
+    "test": "move into excluded path stays outside coverage",
+    "raw": "PASS move into excluded path stays outside coverage"
+  },
+  {
+    "status": "PASS",
+    "test": "Git index and prior dirt are preserved",
+    "raw": "PASS Git index and prior dirt are preserved"
+  },
+  {
+    "status": "PASS",
+    "test": "partial failure is in doubt",
+    "raw": "PASS partial failure is in doubt"
+  },
+  {
+    "status": "PASS",
+    "test": "cross-process state lock and termination",
+    "raw": "PASS cross-process state lock and termination"
+  },
+  {
+    "status": "PASS",
+    "test": "two processes apply same plan",
+    "raw": "PASS two processes apply same plan"
+  },
+  {
+    "status": "PASS",
+    "test": "crash after intent is audited",
+    "raw": "PASS crash after intent is audited"
+  },
+  {
+    "status": "PASS",
+    "test": "crash after safety copy is audited",
+    "raw": "PASS crash after safety copy is audited"
+  },
+  {
+    "status": "PASS",
+    "test": "crash after target mutation is audited",
+    "raw": "PASS crash after target mutation is audited"
+  },
+  {
+    "status": "PASS",
+    "test": "executor retains parent guard through verification",
+    "raw": "PASS executor retains parent guard through verification"
+  },
+  {
+    "status": "PASS",
+    "test": "audited intent blocks a new plan",
+    "raw": "PASS audited intent blocks a new plan"
+  },
+  {
+    "status": "PASS",
+    "test": "required read failure blocks child launch",
+    "raw": "PASS required read failure blocks child launch"
+  },
+  {
+    "status": "PASS",
+    "test": "unsupported required file blocks child launch",
+    "raw": "PASS unsupported required file blocks child launch"
+  },
+  {
+    "status": "PASS",
+    "test": "final read failure is unknown",
+    "raw": "PASS final read failure is unknown"
+  },
+  {
+    "status": "PASS",
+    "test": "explicit external file and directory restore",
+    "raw": "PASS explicit external file and directory restore"
+  },
+  {
+    "status": "PASS",
+    "test": "external file deletion restore",
+    "raw": "PASS external file deletion restore"
+  },
+  {
+    "status": "PASS",
+    "test": "scope IDs separate identical relative paths",
+    "raw": "PASS scope IDs separate identical relative paths"
+  },
+  {
+    "status": "PASS",
+    "test": "state inside protected scope is rejected",
+    "raw": "PASS state inside protected scope is rejected"
+  },
+  {
+    "status": "PASS",
+    "test": "associated group requires complete selection",
+    "raw": "PASS associated group requires complete selection"
+  },
+  {
+    "status": "PASS",
+    "test": "whole group preflight conflict executes zero",
+    "raw": "PASS whole group preflight conflict executes zero"
+  },
+  {
+    "status": "PASS",
+    "test": "failure after first verified operation reports partial",
+    "raw": "PASS failure after first verified operation reports partial"
+  },
+  {
+    "status": "PASS",
+    "test": "crash after reused safety object before reference is audited",
+    "raw": "PASS crash after reused safety object before reference is audited"
+  },
+  {
+    "status": "PASS",
+    "test": "R6 new encrypted object before publish crash",
+    "raw": "PASS R6 new encrypted object before publish crash"
+  },
+  {
+    "status": "PASS",
+    "test": "R6 new encrypted object after publish crash",
+    "raw": "PASS R6 new encrypted object after publish crash"
+  },
+  {
+    "status": "PASS",
+    "test": "R6 new encrypted temporary file creation crash",
+    "raw": "PASS R6 new encrypted temporary file creation crash"
+  },
+  {
+    "status": "PASS",
+    "test": "R6 new encrypted object verification crash",
+    "raw": "PASS R6 new encrypted object verification crash"
+  },
+  {
+    "status": "PASS",
+    "test": "crash after plan commit keeps fixed plan",
+    "raw": "PASS crash after plan commit keeps fixed plan"
+  },
+  {
+    "status": "PASS",
+    "test": "crash after verification is audited",
+    "raw": "PASS crash after verification is audited"
+  },
+  {
+    "status": "PASS",
+    "test": "binary file restore",
+    "raw": "PASS binary file restore"
+  },
+  {
+    "status": "PASS",
+    "test": "exe wrapper preserves arguments stdin stdout and nonzero exit",
+    "raw": "PASS exe wrapper preserves arguments stdin stdout and nonzero exit"
+  },
+  {
+    "status": "PASS",
+    "test": "cmd wrapper preserves space arguments and exit",
+    "raw": "PASS cmd wrapper preserves space arguments and exit"
+  },
+  {
+    "status": "PASS",
+    "test": "cmd quote argument is rejected before launch",
+    "raw": "PASS cmd quote argument is rejected before launch"
+  },
+  {
+    "status": "PASS",
+    "test": "abnormal child exit remains reportable",
+    "raw": "PASS abnormal child exit remains reportable"
+  },
+  {
+    "status": "PASS",
+    "test": "missing safety after restart blocks new apply",
+    "raw": "PASS missing safety after restart blocks new apply"
+  },
+  {
+    "status": "PASS",
+    "test": "parent move at durable intent blocks mutation",
+    "raw": "PASS parent move at durable intent blocks mutation"
+  },
+  {
+    "status": "PASS",
+    "test": "target replacement during verification is blocked",
+    "raw": "PASS target replacement during verification is blocked"
+  },
+  {
+    "status": "PASS",
+    "test": "corrupt baseline before ready blocks child",
+    "raw": "PASS corrupt baseline before ready blocks child"
+  },
+  {
+    "status": "PASS",
+    "test": "overwrite rename is not split into independent changes",
+    "raw": "PASS overwrite rename is not split into independent changes"
+  },
+  {
+    "status": "PASS",
+    "test": "coverage persists four separate buckets and rule version",
+    "raw": "PASS coverage persists four separate buckets and rule version"
+  },
+  {
+    "status": "PASS",
+    "test": "ordinary CLI run remains closed",
+    "raw": "PASS ordinary CLI run remains closed"
+  },
+  {
+    "status": "PASS",
+    "test": "R1 hard link after intent rejects without alias write",
+    "raw": "PASS R1 hard link after intent rejects without alias write"
+  },
+  {
+    "status": "PASS",
+    "test": "R2 changed target object invalidates confirmed plan",
+    "raw": "PASS R2 changed target object invalidates confirmed plan"
+  },
+  {
+    "status": "PASS",
+    "test": "R2 changed scope invalidates confirmed plan",
+    "raw": "PASS R2 changed scope invalidates confirmed plan"
+  },
+  {
+    "status": "PASS",
+    "test": "R3 baseline ADS blocks child",
+    "raw": "PASS R3 baseline ADS blocks child"
+  },
+  {
+    "status": "PASS",
+    "test": "R3 ADS added before apply blocks mutation",
+    "raw": "PASS R3 ADS added before apply blocks mutation"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 recreated root rejects deleted file restore",
+    "raw": "PASS R4 recreated root rejects deleted file restore"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 recreated nested parent rejects restore",
+    "raw": "PASS R4 recreated nested parent rejects restore"
+  },
+  {
+    "status": "PASS",
+    "test": "R5 same-content replacement cannot be verified",
+    "raw": "PASS R5 same-content replacement cannot be verified"
+  },
+  {
+    "status": "PASS",
+    "test": "R1 final attribute change rejects modification",
+    "raw": "PASS R1 final attribute change rejects modification"
+  },
+  {
+    "status": "PASS",
+    "test": "R1 hard link blocks added-file removal",
+    "raw": "PASS R1 hard link blocks added-file removal"
+  },
+  {
+    "status": "PASS",
+    "test": "R1 hard link blocks rename restoration",
+    "raw": "PASS R1 hard link blocks rename restoration"
+  },
+  {
+    "status": "BLOCKED",
+    "test": "R1 capture rejects leaf symlink swap",
+    "raw": "BLOCKED R1 capture rejects leaf symlink swap: Non-elevated symlink creation unavailable: IOException; HResult=0x80070522; message=客户端没有所需的特权。 : 'E:\\BlastRadiusFixture-6e75d519d5604c948ffbc468e8cc0a81\\work\\alpha.txt'."
+  },
+  {
+    "status": "PASS",
+    "test": "R1 capture rejects hard-link leaf swap",
+    "raw": "PASS R1 capture rejects hard-link leaf swap"
+  },
+  {
+    "status": "PASS",
+    "test": "R2 changed operation kind invalidates plan",
+    "raw": "PASS R2 changed operation kind invalidates plan"
+  },
+  {
+    "status": "PASS",
+    "test": "R2 interrupted audit uses confirmed path",
+    "raw": "PASS R2 interrupted audit uses confirmed path"
+  },
+  {
+    "status": "PASS",
+    "test": "R3 ADS on added file blocks removal",
+    "raw": "PASS R3 ADS on added file blocks removal"
+  },
+  {
+    "status": "PASS",
+    "test": "R3 stream query failure is unknown",
+    "raw": "PASS R3 stream query failure is unknown"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 recreated external directory is incomplete",
+    "raw": "PASS R4 recreated external directory is incomplete"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 empty directory history is preserved",
+    "raw": "PASS R4 empty directory history is preserved"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 newly added directory is unsupported",
+    "raw": "PASS R4 newly added directory is unsupported"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 new directory does not receive invented absent baseline",
+    "raw": "PASS R4 new directory does not receive invented absent baseline"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 root replacement before apply conflicts",
+    "raw": "PASS R4 root replacement before apply conflicts"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 root reparent at durable intent rejects mutation",
+    "raw": "PASS R4 root reparent at durable intent rejects mutation"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 intermediate reparent at durable intent rejects mutation",
+    "raw": "PASS R4 intermediate reparent at durable intent rejects mutation"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 ordinary nested file restores",
+    "raw": "PASS R4 ordinary nested file restores"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 root reparent blocks added removal",
+    "raw": "PASS R4 root reparent blocks added removal"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 root reparent blocks deleted recreation",
+    "raw": "PASS R4 root reparent blocks deleted recreation"
+  },
+  {
+    "status": "PASS",
+    "test": "R4 root reparent blocks simple rename",
+    "raw": "PASS R4 root reparent blocks simple rename"
+  },
+  {
+    "status": "PASS",
+    "test": "three-name cycle is unsupported",
+    "raw": "PASS three-name cycle is unsupported"
+  },
+  {
+    "status": "PASS",
+    "test": "cross-parent rename is unsupported",
+    "raw": "PASS cross-parent rename is unsupported"
+  },
+  {
+    "status": "PASS",
+    "test": "cmd metacharacters reject before launch",
+    "raw": "PASS cmd metacharacters reject before launch"
+  },
+  {
+    "status": "PASS",
+    "test": "cmd raw arguments reject before launch",
+    "raw": "PASS cmd raw arguments reject before launch"
+  },
+  {
+    "status": "PASS",
+    "test": "cancel during baseline prevents child launch",
+    "raw": "PASS cancel during baseline prevents child launch"
+  },
+  {
+    "status": "PASS",
+    "test": "cancel during final scan remains incomplete",
+    "raw": "PASS cancel during final scan remains incomplete"
+  },
+  {
+    "status": "PASS",
+    "test": "cancel after child exit with finalization failure preserves code",
+    "raw": "PASS cancel after child exit with finalization failure preserves code"
+  },
+  {
+    "status": "PASS",
+    "test": "unresponsive child cancellation is bounded",
+    "raw": "PASS unresponsive child cancellation is bounded"
+  },
+  {
+    "status": "PASS",
+    "test": "terminated wrapper leaves interrupted session",
+    "raw": "PASS terminated wrapper leaves interrupted session"
+  },
+  {
+    "status": "PASS",
+    "test": "failed final commit cannot report complete",
+    "raw": "PASS failed final commit cannot report complete"
+  },
+  {
+    "status": "PASS",
+    "test": "persistent final save failure audits interrupted",
+    "raw": "PASS persistent final save failure audits interrupted"
+  },
+  {
+    "status": "PASS",
+    "test": "Blast failure process exit overrides known child code",
+    "raw": "PASS Blast failure process exit overrides known child code"
+  },
+  {
+    "status": "PASS",
+    "test": "unconfirmed direct child blocks later run and apply",
+    "raw": "PASS unconfirmed direct child blocks later run and apply"
+  },
+  {
+    "status": "PASS",
+    "test": "terminated wrapper child blocks later run and apply",
+    "raw": "PASS terminated wrapper child blocks later run and apply"
+  },
+  {
+    "status": "PASS",
+    "test": "running save failure retains uncertain child barrier",
+    "raw": "PASS running save failure retains uncertain child barrier"
+  },
+  {
+    "status": "PASS",
+    "test": "prelaunch durable failure prevents child start",
+    "raw": "PASS prelaunch durable failure prevents child start"
+  },
+  {
+    "status": "PASS",
+    "test": "baseline cancellation permits later run",
+    "raw": "PASS baseline cancellation permits later run"
+  },
+  {
+    "status": "PASS",
+    "test": "confirmed completion permits later run",
+    "raw": "PASS confirmed completion permits later run"
+  },
+  {
+    "status": "PASS",
+    "test": "real SQLite double failure returns wrapper error",
+    "raw": "PASS real SQLite double failure returns wrapper error"
+  },
+  {
+    "status": "PASS",
+    "test": "missing object key preserves existing store",
+    "raw": "PASS missing object key preserves existing store"
+  },
+  {
+    "status": "PASS",
+    "test": "report separates supported kind from object integrity and apply state",
+    "raw": "PASS report separates supported kind from object integrity and apply state"
+  },
+  {
+    "status": "PASS",
+    "test": "separate file DACL survives modification and rename",
+    "raw": "PASS separate file DACL survives modification and rename"
+  },
+  {
+    "status": "PASS",
+    "test": "deleted file protected inherited DACL refuses before content",
+    "raw": "PASS deleted file protected inherited DACL refuses before content"
+  },
+  {
+    "status": "PASS",
+    "test": "DACL change after A rejects without neighbor mutation",
+    "raw": "PASS DACL change after A rejects without neighbor mutation"
+  },
+  {
+    "status": "PASS",
+    "test": "security read failure is unknown before launch",
+    "raw": "PASS security read failure is unknown before launch"
+  },
+  {
+    "status": "PASS",
+    "test": "unsupported attribute blocks baseline",
+    "raw": "PASS unsupported attribute blocks baseline"
+  },
+  {
+    "status": "PASS",
+    "test": "legacy state without security metadata rejects apply",
+    "raw": "PASS legacy state without security metadata rejects apply"
+  },
+  {
+    "status": "PASS",
+    "test": "fixed plan rejects changed security target",
+    "raw": "PASS fixed plan rejects changed security target"
+  },
+  {
+    "status": "PASS",
+    "test": "state key database journal and encrypted object ACLs",
+    "raw": "PASS state key database journal and encrypted object ACLs"
+  },
+  {
+    "status": "PASS",
+    "test": "broad state ACL is rejected without changing parent",
+    "raw": "PASS broad state ACL is rejected without changing parent"
+  },
+  {
+    "status": "PASS",
+    "test": "Normal deleted file refuses before target creation",
+    "raw": "PASS Normal deleted file refuses before target creation"
+  },
+  {
+    "status": "PASS",
+    "test": "declared attributes modify or refuse before mutation",
+    "raw": "PASS declared attributes modify or refuse before mutation"
+  },
+  {
+    "status": "PASS",
+    "test": "declared attributes rename policy and added removal",
+    "raw": "PASS declared attributes rename policy and added removal"
+  },
+  {
+    "status": "PASS",
+    "test": "Archive Hidden C attribute drift rejects supported operations",
+    "raw": "PASS Archive Hidden C attribute drift rejects supported operations"
+  },
+  {
+    "status": "PASS",
+    "test": "other non-Archive deletion targets refuse before creation",
+    "raw": "PASS other non-Archive deletion targets refuse before creation"
+  },
+  {
+    "status": "PASS",
+    "test": "failed state open disposes connection immediately",
+    "raw": "PASS failed state open disposes connection immediately"
+  }
+]

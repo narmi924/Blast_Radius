@@ -38,10 +38,31 @@ static int Mutate(string[] args)
     switch (args[3])
     {
         case "modify": File.WriteAllText(a, "after"); break;
+        case "modify-preserve-attributes":
+            var attributes = File.GetAttributes(a);
+            using (var stream = new FileStream(a, FileMode.Open, FileAccess.Write, FileShare.None))
+            {
+                stream.SetLength(0);
+                stream.Write(Encoding.UTF8.GetBytes("after"));
+                stream.Flush(true);
+            }
+            File.SetAttributes(a, attributes);
+            break;
         case "add": File.WriteAllText(Path.Combine(fixture.Root, "new.txt"), "new content"); break;
+        case "add-with-attributes":
+            string addedPath = Path.Combine(fixture.Root, "new.txt");
+            File.WriteAllText(addedPath, "new content");
+            File.SetAttributes(addedPath, (FileAttributes)int.Parse(args[4]));
+            break;
         case "add-empty": File.WriteAllBytes(Path.Combine(fixture.Root, "new.txt"), []); break;
         case "delete": File.Delete(a); break;
         case "rename": File.Move(a, Path.Combine(fixture.Root, "beta.txt")); break;
+        case "rename-preserve-attributes":
+            var renameAttributes = File.GetAttributes(a);
+            string renamedPath = Path.Combine(fixture.Root, "beta.txt");
+            File.Move(a, renamedPath);
+            File.SetAttributes(renamedPath, renameAttributes);
+            break;
         case "double-modify":
             File.WriteAllText(a, "after");
             File.WriteAllText(Path.Combine(fixture.Root, "bravo.txt"), "after bravo");
@@ -93,7 +114,8 @@ static int Mutate(string[] args)
         case "hang":
             File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"),
                 Environment.ProcessId.ToString());
-            Directory.SetCurrentDirectory(fixture.StateDirectory);
+            // The live test child must not pin any directory that fixture cleanup owns.
+            Directory.SetCurrentDirectory(Path.GetPathRoot(fixture.DirectoryPath)!);
             File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-relocated.signal"), "ready");
             Thread.Sleep(TimeSpan.FromSeconds(30));
             break;
@@ -583,6 +605,12 @@ static int All(string? filter = null)
         ,("fixed plan rejects changed security target", FixedPlanRejectsSecurityTamper)
         ,("state key database journal and encrypted object ACLs", StoragePermissions)
         ,("broad state ACL is rejected without changing parent", BroadStateAclRejected)
+        ,("Normal deleted file refuses before target creation", NormalDeletedPreflight)
+        ,("declared attributes modify or refuse before mutation", DeclaredAttributesModification)
+        ,("declared attributes rename policy and added removal", DeclaredAttributesRenameAndRemoval)
+        ,("Archive Hidden C attribute drift rejects supported operations", ArchiveHiddenDriftRejects)
+        ,("other non-Archive deletion targets refuse before creation", OtherNonArchiveDeletedPreflight)
+        ,("failed state open disposes connection immediately", FailedStateOpenDisposesConnection)
     };
     int failures = 0, passed = 0, skipped = 0, blocked = 0;
     var selected = tests.Where(t => filter is null || t.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -756,10 +784,16 @@ static void Deleted()
     {
         var change = OnlyChange(report, ChangeKind.Deleted);
         Check(change.Final.Presence == Presence.Absent && change.Final.ObjectId is null, "Deleted A is not Absent.");
+        Check(change.Baseline.Attributes == FileAttributes.Archive,
+            "Ordinary deleted-file fixture was not actually Archive.");
         var plan = engine.Preview(report.Id, [change.Id]);
         var result = engine.Apply(plan.Id, plan.Hash);
         Check(result.Status == "verified" && result.OperationsApplied == 1, "Deleted file recovery did not verify.");
         Check(File.ReadAllText(Path.Combine(fixture.Root, "alpha.txt")) == "before", "Deleted content not restored.");
+        using (var restored = WindowsFiles.OpenFile(Path.Combine(fixture.Root, "alpha.txt"), write: false))
+            Check(WindowsFiles.ValidateSupportedLeaf(restored,
+                Path.Combine(fixture.Root, "alpha.txt")).Attributes == FileAttributes.Archive,
+                "Restored deleted file lost its Archive attribute after release.");
         Check(result.Operations.Single().SafetyObjectId is null, "An absent C got a fake safety object.");
         Check(result.Operations.Single().ExpectedPrePresence == Presence.Absent &&
               result.Operations.Single().ExpectedPreParentId != 0,
@@ -2972,6 +3006,314 @@ static void BroadStateAclRejected()
               AccessControlSections.Access | AccessControlSections.Owner)
               .GetSecurityDescriptorSddlForm(AccessControlSections.Access | AccessControlSections.Owner) == beforeParent,
         "State ACL validation changed the fixture parent ACL.");
+}
+
+static FileAttributes ActualAttributes(string path)
+{
+    using var handle = WindowsFiles.OpenFile(path, write: false);
+    return WindowsFiles.ValidateSupportedLeaf(handle, path).Attributes;
+}
+
+static string AccessSddl(string path, bool directory)
+{
+    const AccessControlSections sections = AccessControlSections.Owner | AccessControlSections.Access;
+    return directory
+        ? new DirectoryInfo(path).GetAccessControl(sections).GetSecurityDescriptorSddlForm(sections)
+        : new FileInfo(path).GetAccessControl(sections).GetSecurityDescriptorSddlForm(sections);
+}
+
+static void NormalDeletedPreflight()
+{
+    using var fixture = SyntheticFixture.Create();
+    string target = Path.Combine(fixture.Root, "alpha.txt");
+    string neighbor = Path.Combine(fixture.Root, "neighbor.txt");
+    File.WriteAllText(target, "before");
+    File.SetAttributes(target, FileAttributes.Normal);
+    File.WriteAllText(neighbor, "neighbor-before");
+    FileAttributes neighborAttributes = ActualAttributes(neighbor);
+    string neighborSecurity = AccessSddl(neighbor, directory: false);
+    string parentSecurity = AccessSddl(fixture.Root, directory: true);
+    Check(ActualAttributes(target) == FileAttributes.Normal,
+        "Normal fixture did not have Normal on the actual file handle.");
+
+    var engine = new SessionEngine(fixture);
+    var run = engine.Run(Child(fixture, "delete"));
+    Check(run.BlastStatus == "ok" && run.ChildExitCode == 0, "Normal deletion command failed.");
+    var report = engine.Report(run.SessionId);
+    var change = OnlyChange(report, ChangeKind.Deleted);
+    Check(change.Baseline.Presence == Presence.Present &&
+          change.Baseline.Attributes == FileAttributes.Normal &&
+          change.Final.Presence == Presence.Absent && !File.Exists(target),
+        "Normal B or absent A fixture was not established.");
+
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    var result = engine.Apply(plan.Id, plan.Hash);
+    bool exists = File.Exists(target);
+    long? length = exists ? new FileInfo(target).Length : null;
+    string? content = exists ? File.ReadAllText(target) : null;
+    FileAttributes? actual = exists ? ActualAttributes(target) : null;
+    string persistedStatus = engine.State.LoadPlan(plan.Id).Status;
+    Console.WriteLine($"NORMAL_DELETE_RESULT status={result.Status} operations={result.OperationsApplied} " +
+        $"plan={persistedStatus} exists={exists} length={length?.ToString() ?? "null"} " +
+        $"content={content ?? "null"} attributes={actual?.ToString() ?? "null"}");
+    Check(result.Status == "no operations applied" && result.OperationsApplied == 0 &&
+          persistedStatus == "conflict" && result.Operations.All(op => op.Status == "conflict") &&
+          !exists && length is null && content is null && actual is null &&
+          File.ReadAllText(neighbor) == "neighbor-before" &&
+          ActualAttributes(neighbor) == neighborAttributes &&
+          AccessSddl(neighbor, directory: false) == neighborSecurity &&
+          AccessSddl(fixture.Root, directory: true) == parentSecurity &&
+          !engine.State.HasUnresolvedPlans(),
+        "Known unsupported Normal deletion created a target, changed neighbors, or left an unresolved plan.");
+}
+
+static void DeclaredAttributesModification()
+{
+    var failures = new List<string>();
+    foreach (var attributes in new[]
+        { FileAttributes.Normal, FileAttributes.Hidden, FileAttributes.Archive,
+          FileAttributes.Archive | FileAttributes.Hidden })
+    {
+        using var fixture = SyntheticFixture.Create();
+        string target = Path.Combine(fixture.Root, "alpha.txt");
+        string neighbor = Path.Combine(fixture.Root, "neighbor.txt");
+        File.WriteAllText(target, "before");
+        File.SetAttributes(target, attributes);
+        File.WriteAllText(neighbor, "neighbor-before");
+        string neighborSecurity = AccessSddl(neighbor, directory: false);
+        string parentSecurity = AccessSddl(fixture.Root, directory: true);
+        FileAttributes neighborAttributes = ActualAttributes(neighbor);
+        Check(ActualAttributes(target) == attributes,
+            "Actual baseline attribute did not match the requested fixture: " + attributes);
+        var engine = new SessionEngine(fixture);
+        var run = engine.Run(Child(fixture, "modify-preserve-attributes"));
+        Check(run.BlastStatus == "ok" && run.ChildExitCode == 0,
+            "Attribute-preserving synthetic command failed: " + run.BlastStatus);
+        var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Modified);
+        Check(change.Baseline.Attributes == attributes && change.Final.Attributes == attributes &&
+              ActualAttributes(target) == attributes,
+            "B/A attributes changed during synthetic modification: " + attributes);
+        var plan = engine.Preview(run.SessionId, [change.Id]);
+        var applied = engine.Apply(plan.Id, plan.Hash);
+        string content = File.ReadAllText(target);
+        var actualAttributes = ActualAttributes(target);
+        Console.WriteLine($"ATTRIBUTE_MODIFY attributes={attributes} status={applied.Status} " +
+            $"operations={applied.OperationsApplied} content={content} actual={actualAttributes}");
+        bool canRestore = attributes.HasFlag(FileAttributes.Archive);
+        bool correct = canRestore
+            ? applied.Status == "verified" && applied.OperationsApplied == 1 &&
+              content == "before" && actualAttributes == attributes
+            : applied.Status == "no operations applied" && applied.OperationsApplied == 0 &&
+              engine.State.LoadPlan(plan.Id).Status == "conflict" &&
+              applied.Operations.All(op => op.Status == "conflict") &&
+              content == "after" && actualAttributes == attributes &&
+              !engine.State.HasUnresolvedPlans();
+        correct &= File.ReadAllText(neighbor) == "neighbor-before" &&
+                   ActualAttributes(neighbor) == neighborAttributes &&
+                   AccessSddl(neighbor, directory: false) == neighborSecurity &&
+                   AccessSddl(fixture.Root, directory: true) == parentSecurity;
+        if (!correct)
+            failures.Add(attributes + " -> " + applied.Status + "/" + actualAttributes);
+    }
+    Check(failures.Count == 0,
+        "Modified file attributes were neither restored nor refused before mutation: " +
+        string.Join("; ", failures));
+}
+
+static void DeclaredAttributesRenameAndRemoval()
+{
+    var failures = new List<string>();
+    foreach (var attributes in new[]
+        { FileAttributes.Normal, FileAttributes.Hidden, FileAttributes.Archive,
+          FileAttributes.Archive | FileAttributes.Hidden })
+    {
+        using (var fixture = SyntheticFixture.Create())
+        {
+            string source = Path.Combine(fixture.Root, "alpha.txt");
+            string destination = Path.Combine(fixture.Root, "beta.txt");
+            string neighbor = Path.Combine(fixture.Root, "neighbor.txt");
+            File.WriteAllText(source, "before");
+            File.SetAttributes(source, attributes);
+            File.WriteAllText(neighbor, "neighbor-before");
+            string neighborSecurity = AccessSddl(neighbor, directory: false);
+            string parentSecurity = AccessSddl(fixture.Root, directory: true);
+            FileAttributes neighborAttributes = ActualAttributes(neighbor);
+            Check(ActualAttributes(source) == attributes, "Rename source attribute fixture failed.");
+            var engine = new SessionEngine(fixture);
+            var run = engine.Run(Child(fixture, "rename-preserve-attributes"));
+            Check(run.BlastStatus == "ok" && run.ChildExitCode == 0, "Rename child failed.");
+            var observed = engine.Report(run.SessionId).Changes!.Single();
+            Console.WriteLine($"ATTRIBUTE_RENAME_OBSERVED requested={attributes} kind={observed.Kind} " +
+                $"baseline={observed.Baseline.Attributes} final={observed.Final.Attributes} " +
+                $"destination={ActualAttributes(destination)}");
+            var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Renamed);
+            Check(change.Baseline.Attributes == attributes && change.Final.Attributes == attributes,
+                "Rename B/A attributes differ.");
+            var plan = engine.Preview(run.SessionId, [change.Id]);
+            var applied = engine.Apply(plan.Id, plan.Hash);
+            bool sourceExists = File.Exists(source);
+            bool destinationExists = File.Exists(destination);
+            FileAttributes? sourceAttributes = sourceExists ? ActualAttributes(source) : null;
+            FileAttributes? destinationAttributes = destinationExists ? ActualAttributes(destination) : null;
+            Console.WriteLine($"ATTRIBUTE_RENAME_RESULT requested={attributes} status={applied.Status} " +
+                $"operations={applied.OperationsApplied} source={sourceExists}/{sourceAttributes} " +
+                $"destination={destinationExists}/{destinationAttributes}");
+            bool canRestore = attributes.HasFlag(FileAttributes.Archive);
+            bool correct = canRestore
+                ? applied.Status == "verified" && applied.OperationsApplied == 1 &&
+                  sourceExists && File.ReadAllText(source) == "before" &&
+                  sourceAttributes == attributes && !destinationExists
+                : applied.Status == "no operations applied" && applied.OperationsApplied == 0 &&
+                  engine.State.LoadPlan(plan.Id).Status == "conflict" &&
+                  applied.Operations.All(op => op.Status == "conflict") && !sourceExists &&
+                  destinationExists && File.ReadAllText(destination) == "before" &&
+                  destinationAttributes == attributes && !engine.State.HasUnresolvedPlans();
+            correct &= File.ReadAllText(neighbor) == "neighbor-before" &&
+                       ActualAttributes(neighbor) == neighborAttributes &&
+                       AccessSddl(neighbor, directory: false) == neighborSecurity &&
+                       AccessSddl(fixture.Root, directory: true) == parentSecurity;
+            if (!correct) failures.Add("rename " + attributes + " -> " + applied.Status);
+        }
+        using (var fixture = SyntheticFixture.Create())
+        {
+            string added = Path.Combine(fixture.Root, "new.txt");
+            var engine = new SessionEngine(fixture);
+            var run = engine.Run(Child(fixture, "add-with-attributes", ((int)attributes).ToString()));
+            Check(run.BlastStatus == "ok" && run.ChildExitCode == 0, "Added child failed.");
+            var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Added);
+            Check(change.Final.Attributes == attributes && ActualAttributes(added) == attributes,
+                "Added A attributes differ.");
+            var plan = engine.Preview(run.SessionId, [change.Id]);
+            var applied = engine.Apply(plan.Id, plan.Hash);
+            Check(applied.Status == "verified" && applied.OperationsApplied == 1 && !File.Exists(added) &&
+                  applied.Operations.Single().SafetyObjectId is not null,
+                "Added removal failed for attributes: " + attributes);
+        }
+        Console.WriteLine($"ATTRIBUTE_REMOVAL attributes={attributes} status=verified operations=1");
+    }
+    Check(failures.Count == 0, "Rename was neither verified nor refused before mutation: " +
+        string.Join("; ", failures));
+}
+
+static void OtherNonArchiveDeletedPreflight()
+{
+    foreach (var attributes in new[]
+        { FileAttributes.Hidden, FileAttributes.Archive | FileAttributes.Hidden })
+    {
+        using var fixture = SyntheticFixture.Create();
+        string target = Path.Combine(fixture.Root, "alpha.txt");
+        string neighbor = Path.Combine(fixture.Root, "neighbor.txt");
+        File.WriteAllText(target, "before");
+        File.SetAttributes(target, attributes);
+        File.WriteAllText(neighbor, "neighbor-before");
+        string neighborSecurity = AccessSddl(neighbor, directory: false);
+        string parentSecurity = AccessSddl(fixture.Root, directory: true);
+        FileAttributes neighborAttributes = ActualAttributes(neighbor);
+        Check(ActualAttributes(target) == attributes, "Deletion attribute fixture failed.");
+        var engine = new SessionEngine(fixture);
+        var run = engine.Run(Child(fixture, "delete"));
+        Check(run.BlastStatus == "ok" && run.ChildExitCode == 0, "Deletion child failed.");
+        var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Deleted);
+        Check(change.Baseline.Attributes == attributes && change.Final.Presence == Presence.Absent,
+            "Deleted B/A attributes or presence differ.");
+        var plan = engine.Preview(run.SessionId, [change.Id]);
+        var applied = engine.Apply(plan.Id, plan.Hash);
+        Console.WriteLine($"ATTRIBUTE_DELETE_REFUSAL attributes={attributes} status={applied.Status} " +
+            $"operations={applied.OperationsApplied} exists={File.Exists(target)}");
+        Check(applied.Status == "no operations applied" && applied.OperationsApplied == 0 &&
+              engine.State.LoadPlan(plan.Id).Status == "conflict" &&
+              applied.Operations.All(op => op.Status == "conflict") && !File.Exists(target) &&
+              File.ReadAllText(neighbor) == "neighbor-before" &&
+              ActualAttributes(neighbor) == neighborAttributes &&
+              AccessSddl(neighbor, directory: false) == neighborSecurity &&
+              AccessSddl(fixture.Root, directory: true) == parentSecurity &&
+              !engine.State.HasUnresolvedPlans(),
+            "Unsupported deleted attribute changed target or nearby security.");
+    }
+}
+
+static void ArchiveHiddenDriftRejects()
+{
+    foreach (var kind in new[] { ChangeKind.Modified, ChangeKind.Renamed })
+    {
+        using var fixture = SyntheticFixture.Create();
+        string original = Path.Combine(fixture.Root, "alpha.txt");
+        string current = kind == ChangeKind.Modified ? original :
+            Path.Combine(fixture.Root, "beta.txt");
+        string neighbor = Path.Combine(fixture.Root, "neighbor.txt");
+        File.WriteAllText(original, "before");
+        File.SetAttributes(original, FileAttributes.Archive | FileAttributes.Hidden);
+        File.WriteAllText(neighbor, "neighbor-before");
+        string neighborSecurity = AccessSddl(neighbor, directory: false);
+        string parentSecurity = AccessSddl(fixture.Root, directory: true);
+        var engine = new SessionEngine(fixture);
+        var run = engine.Run(Child(fixture, kind == ChangeKind.Modified ?
+            "modify-preserve-attributes" : "rename-preserve-attributes"));
+        Check(run.BlastStatus == "ok" && run.ChildExitCode == 0, "Attribute drift fixture run failed.");
+        var change = OnlyChange(engine.Report(run.SessionId), kind);
+        Check(change.Baseline.Attributes == (FileAttributes.Archive | FileAttributes.Hidden) &&
+              change.Final.Attributes == change.Baseline.Attributes &&
+              ActualAttributes(current) == change.Final.Attributes,
+            "Archive+Hidden B/A fixture was not established.");
+        var plan = engine.Preview(run.SessionId, [change.Id]);
+        File.SetAttributes(current, FileAttributes.Archive);
+        Check(ActualAttributes(current) == FileAttributes.Archive,
+            "Post-A attribute drift did not reach the actual file handle.");
+        var result = engine.Apply(plan.Id, plan.Hash);
+        Check(result.Status == "no operations applied" && result.OperationsApplied == 0 &&
+              engine.State.LoadPlan(plan.Id).Status == "conflict" &&
+              ActualAttributes(current) == FileAttributes.Archive &&
+              File.ReadAllText(current) == (kind == ChangeKind.Modified ? "after" : "before") &&
+              (kind != ChangeKind.Renamed || !File.Exists(original)) &&
+              File.ReadAllText(neighbor) == "neighbor-before" &&
+              AccessSddl(neighbor, directory: false) == neighborSecurity &&
+              AccessSddl(fixture.Root, directory: true) == parentSecurity,
+            "Supported Archive+Hidden operation ignored post-A attribute conflict.");
+        Console.WriteLine($"ARCHIVE_HIDDEN_CONFLICT kind={kind} operations=0 status=conflict");
+    }
+}
+
+static void FailedStateOpenDisposesConnection()
+{
+    using var fixture = SyntheticFixture.Create();
+    var state = new StateStore(fixture.StateDirectory);
+    string database = state.DatabasePathForTest;
+    var file = new FileInfo(database);
+    const AccessControlSections sections = AccessControlSections.Owner | AccessControlSections.Access;
+    var original = file.GetAccessControl(sections);
+    var broad = file.GetAccessControl(sections);
+    var broadRule = new FileSystemAccessRule(
+        new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+        FileSystemRights.ReadData, AccessControlType.Allow);
+    broad.AddAccessRule(broadRule);
+    file.SetAccessControl(broad);
+    SqliteConnection? opened = null;
+    Exception? failure = null;
+    SqliteConnection? observed = null;
+    try
+    {
+        StateStore.AfterConnectionOpenedForTest = connection => opened = connection;
+        try { state.LoadSession("test-owned-nonexistent-session"); }
+        catch (Exception ex) { failure = ex; }
+        observed = opened;
+        Console.WriteLine($"STATE_OPEN_FAILURE exception={failure?.GetType().Name ?? "none"} " +
+            $"connection_state={observed?.State.ToString() ?? "none"}");
+        Check(failure is UnauthorizedAccessException && observed is not null &&
+              observed.State == System.Data.ConnectionState.Closed,
+            "Failed state Open did not propagate ACL refusal and immediately close its connection.");
+    }
+    finally
+    {
+        StateStore.AfterConnectionOpenedForTest = null;
+        observed?.Dispose();
+        var cleanup = file.GetAccessControl(sections);
+        cleanup.SetSecurityDescriptorSddlForm(
+            original.GetSecurityDescriptorSddlForm(sections), sections);
+        file.SetAccessControl(cleanup);
+        StorageAccess.VerifyFile(database);
+        Console.WriteLine("STATE_ACL_RESTORED=private");
+    }
+    using var recovered = new StateStore(fixture.StateDirectory).AcquireLock();
 }
 
 static void Check(bool condition, string message)

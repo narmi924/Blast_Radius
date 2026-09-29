@@ -1,0 +1,7 @@
+STATE_OPEN_FAILURE exception=UnauthorizedAccessException connection_state=Open
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL failed state open disposes connection immediately: System.Exception: Failed state Open did not propagate ACL refusal and immediately close its connection.
+   at Program.<<Main>$>g__Check|0_154(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3119
+   at Program.<<Main>$>g__FailedStateOpenDisposesConnection|0_153() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3104
+   at Program.<<Main>$>g__All|0_18(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 605
+TEST_EXIT=1

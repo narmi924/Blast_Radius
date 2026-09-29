@@ -1,0 +1,5 @@
+ATTRIBUTE_DELETE_REFUSAL attributes=Hidden status=no operations applied operations=0 exists=False
+ATTRIBUTE_DELETE_REFUSAL attributes=Hidden, Archive status=no operations applied operations=0 exists=False
+PASS other non-Archive deletion targets refuse before creation
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0
+TEST_EXIT=0

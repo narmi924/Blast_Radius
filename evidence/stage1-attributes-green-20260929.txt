@@ -1,0 +1,20 @@
+ATTRIBUTE_MODIFY attributes=Normal status=no operations applied operations=0 content=after actual=Normal
+ATTRIBUTE_MODIFY attributes=Hidden status=no operations applied operations=0 content=after actual=Hidden
+ATTRIBUTE_MODIFY attributes=Archive status=verified operations=1 content=before actual=Archive
+ATTRIBUTE_MODIFY attributes=Hidden, Archive status=verified operations=1 content=before actual=Hidden, Archive
+PASS declared attributes survive ordinary modification
+ATTRIBUTE_RENAME_OBSERVED requested=Normal kind=Renamed baseline=Normal final=Normal destination=Normal
+ATTRIBUTE_RENAME_RESULT requested=Normal status=no operations applied operations=0 source=False/ destination=True/Normal
+ATTRIBUTE_REMOVAL attributes=Normal status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Hidden kind=Renamed baseline=Hidden final=Hidden destination=Hidden
+ATTRIBUTE_RENAME_RESULT requested=Hidden status=no operations applied operations=0 source=False/ destination=True/Hidden
+ATTRIBUTE_REMOVAL attributes=Hidden status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Archive kind=Renamed baseline=Archive final=Archive destination=Archive
+ATTRIBUTE_RENAME_RESULT requested=Archive status=verified operations=1 source=True/Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Archive status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Hidden, Archive kind=Renamed baseline=Hidden, Archive final=Hidden, Archive destination=Hidden, Archive
+ATTRIBUTE_RENAME_RESULT requested=Hidden, Archive status=verified operations=1 source=True/Hidden, Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Hidden, Archive status=verified operations=1
+PASS declared attributes survive rename and added removal
+RESULT: Passed=2 Failed=0 Skipped=0 Blocked=0
+TEST_EXIT=0

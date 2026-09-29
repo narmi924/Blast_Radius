@@ -7,6 +7,7 @@ namespace Blast;
 internal sealed class StateStore
 {
     internal static Action<SessionRecord>? BeforeSessionSaveForTest { get; set; }
+    internal static Action<SqliteConnection>? AfterConnectionOpenedForTest { get; set; }
     private readonly string directory;
     private readonly string database;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -58,11 +59,24 @@ internal sealed class StateStore
             Mode = SqliteOpenMode.ReadWriteCreate,
             Pooling = false
         }.ToString());
-        connection.Open();
-        StorageAccess.VerifyFile(database);
-        Command(connection, "PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;")
-            .ExecuteNonQuery();
-        return connection;
+        try
+        {
+            connection.Open();
+            AfterConnectionOpenedForTest?.Invoke(connection);
+            StorageAccess.VerifyFile(database);
+            using var command = Command(connection,
+                "PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;");
+            command.ExecuteNonQuery();
+            return connection;
+        }
+        catch (Exception failure)
+        {
+            // Preserve the original Open/ACL/PRAGMA error even if cleanup itself fails.
+            try { connection.Dispose(); }
+            catch (Exception disposeFailure)
+            { failure.Data["connection_dispose_failure"] = disposeFailure; }
+            throw;
+        }
     }
 
     private static SqliteCommand Command(SqliteConnection connection, string sql, SqliteTransaction? transaction = null)

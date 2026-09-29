@@ -1,0 +1,7 @@
+NORMAL_DELETE_RESULT status=in doubt; target may have changed operations=0 plan=in_doubt exists=True length=0 content= attributes=Archive
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL Normal deleted file refuses before target creation: System.Exception: Known unsupported Normal deletion created a target, changed neighbors, or left an unresolved plan.
+   at Program.<<Main>$>g__Check|0_154(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3119
+   at Program.<<Main>$>g__NormalDeletedPreflight|0_151() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3039
+   at Program.<<Main>$>g__All|0_18(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 605
+TEST_EXIT=1

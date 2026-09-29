@@ -1,0 +1,5 @@
+ARCHIVE_HIDDEN_CONFLICT kind=Modified operations=0 status=conflict
+ARCHIVE_HIDDEN_CONFLICT kind=Renamed operations=0 status=conflict
+PASS Archive Hidden C attribute drift rejects supported operations
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0
+TEST_EXIT=0

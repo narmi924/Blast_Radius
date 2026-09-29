@@ -811,9 +811,12 @@ internal sealed class SessionEngine
         if (change.Kind == ChangeKind.Deleted)
         {
             FileMetadata.RequireCreatableSecurity(change.Baseline.Security!);
-            if (change.Baseline.Attributes is not (FileAttributes.Archive or FileAttributes.Normal))
+            if (change.Baseline.Attributes != FileAttributes.Archive)
                 throw new NotSupportedException("Deleted file attributes cannot be recreated before content.");
         }
+        if ((change.Kind is ChangeKind.Modified or ChangeKind.Renamed) &&
+            !change.Baseline.Attributes.HasFlag(FileAttributes.Archive))
+            throw new NotSupportedException("File attributes cannot be preserved by this restore operation.");
         string currentPath = change.Kind == ChangeKind.Renamed ? change.Destination! : change.Path;
         var current = Capture(session, currentPath).State;
         if (!PreMatches(current, change.Final)) throw new InvalidOperationException("Current file conflicts with A.");
@@ -922,7 +925,7 @@ internal sealed class SessionEngine
                     throw new InvalidOperationException("Deleted path became occupied.");
                 byte[] target = objects.Read(change.Baseline.ObjectId!);
                 parents.Check();
-                if (change.Baseline.Attributes is not (FileAttributes.Archive or FileAttributes.Normal))
+                if (change.Baseline.Attributes != FileAttributes.Archive)
                     throw new NotSupportedException("Deleted file attributes cannot be created before content safely.");
                 using var stream = FileMetadata.CreateWithSecurity(path, change.Baseline.Security!);
                 var created = WindowsFiles.ValidateSupportedLeaf(stream.SafeFileHandle, path);

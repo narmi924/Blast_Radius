@@ -1,0 +1,10 @@
+ATTRIBUTE_MODIFY attributes=Normal status=in doubt; target may have changed operations=0 content=before actual=Archive
+ATTRIBUTE_MODIFY attributes=Hidden status=in doubt; target may have changed operations=0 content=before actual=Hidden, Archive
+ATTRIBUTE_MODIFY attributes=Archive status=verified operations=1 content=before actual=Archive
+ATTRIBUTE_MODIFY attributes=Hidden, Archive status=verified operations=1 content=before actual=Hidden, Archive
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL declared attributes survive ordinary modification: System.Exception: Modified file content or attributes were not restored after handle release: Normal -> in doubt; target may have changed/Archive; Hidden -> in doubt; target may have changed/Hidden, Archive
+   at Program.<<Main>$>g__Check|0_154(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3130
+   at Program.<<Main>$>g__DeclaredAttributesModification|0_152() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3086
+   at Program.<<Main>$>g__All|0_18(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 610
+TEST_EXIT=1

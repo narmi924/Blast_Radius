@@ -1,0 +1,4 @@
+BLOCK_EVIDENCE new_child_started=false apply_operations=0 target=after
+PASS running save failure retains uncertain child barrier
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0
+TEST_EXIT=0

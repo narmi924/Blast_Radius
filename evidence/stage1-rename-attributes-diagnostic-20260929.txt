@@ -1,0 +1,7 @@
+ATTRIBUTE_RENAME_OBSERVED requested=Normal kind=Renamed baseline=Normal final=Normal destination=Normal
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL declared attributes survive rename and added removal: System.Exception: Simple rename did not preserve attributes: Normal
+   at Program.<<Main>$>g__Check|0_156(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3255
+   at Program.<<Main>$>g__DeclaredAttributesRenameAndRemoval|0_153() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3146
+   at Program.<<Main>$>g__All|0_18(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 623
+TEST_EXIT=1

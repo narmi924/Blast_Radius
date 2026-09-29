@@ -1,0 +1,18 @@
+ATTRIBUTE_RENAME_OBSERVED requested=Normal kind=Renamed baseline=Normal final=Normal destination=Normal
+ATTRIBUTE_RENAME_RESULT requested=Normal status=verified operations=1 source=True/Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Normal status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Hidden kind=Renamed baseline=Hidden final=Hidden destination=Hidden
+ATTRIBUTE_RENAME_RESULT requested=Hidden status=verified operations=1 source=True/Hidden, Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Hidden status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Archive kind=Renamed baseline=Archive final=Archive destination=Archive
+ATTRIBUTE_RENAME_RESULT requested=Archive status=verified operations=1 source=True/Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Archive status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Hidden, Archive kind=Renamed baseline=Hidden, Archive final=Hidden, Archive destination=Hidden, Archive
+ATTRIBUTE_RENAME_RESULT requested=Hidden, Archive status=verified operations=1 source=True/Hidden, Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Hidden, Archive status=verified operations=1
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL declared attributes survive rename and added removal: System.Exception: Rename was neither verified nor refused before mutation: rename Normal -> verified; rename Hidden -> verified
+   at Program.<<Main>$>g__Check|0_156(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3269
+   at Program.<<Main>$>g__DeclaredAttributesRenameAndRemoval|0_153() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3183
+   at Program.<<Main>$>g__All|0_18(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 623
+TEST_EXIT=1
