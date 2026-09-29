@@ -1,0 +1,72 @@
+[
+  {
+    "path": "src/Blast/AssemblyInfo.cs",
+    "sha256": "6B2095698917465104F0E8FE710EDA0DA0AB71138E91C48C54C781581D5C21FB",
+    "bytes": 86
+  },
+  {
+    "path": "src/Blast/Blast.csproj",
+    "sha256": "CBF3F612075C9F8B6FA55A58217115221C79051B390D806D905FCD71C990D6F0",
+    "bytes": 466
+  },
+  {
+    "path": "src/Blast/FileSystemScope.cs",
+    "sha256": "019993A3C58CA5451459593DE35355075ECEACB3240EC5240EC6D03DFCFA7E94",
+    "bytes": 12465
+  },
+  {
+    "path": "src/Blast/Models.cs",
+    "sha256": "BB46E8220F5B7CEB718904672036AA7062207B63906068D3D8DA2EAD93C6D87B",
+    "bytes": 4468
+  },
+  {
+    "path": "src/Blast/ObjectStore.cs",
+    "sha256": "F9DA3DE3F9D1C1A79CE1827E90E0027B39DA3511D8D21FA98F3DF942359EF3B1",
+    "bytes": 5521
+  },
+  {
+    "path": "src/Blast/packages.lock.json",
+    "sha256": "AF52B6564ABA16581920B6A78866EDDFFD2A87EB017311D3D12A0221404C4357",
+    "bytes": 2232
+  },
+  {
+    "path": "src/Blast/Program.cs",
+    "sha256": "41ECA4D75BA542FD52D69383F972F3F5E3CAF6F09B12070C2DCD7D188942251F",
+    "bytes": 1343
+  },
+  {
+    "path": "src/Blast/SessionEngine.cs",
+    "sha256": "4537C1CA3361581AE75DA8E27821F52C96E84B5F903651593BB3F49312A8257B",
+    "bytes": 47347
+  },
+  {
+    "path": "src/Blast/StateStore.cs",
+    "sha256": "0A38E1E7E79E0068AB4BE993BE9B8B23B2F24A5E2D6DA6FE38397CBDDE733551",
+    "bytes": 14291
+  },
+  {
+    "path": "src/Blast/SyntheticFixture.cs",
+    "sha256": "2C4057FADF64C67F59D3E7BD84A9BC91F1B7847B87E51E82A06D311AAF71AE13",
+    "bytes": 4171
+  },
+  {
+    "path": "src/Blast/WindowsFiles.cs",
+    "sha256": "26B3834A2CB494AFDA66758A6BF472ABC4B1F8B45B78BE5259D6CC55A9C57702",
+    "bytes": 9409
+  },
+  {
+    "path": "tests/Blast.Tests/Blast.Tests.csproj",
+    "sha256": "7D4035DE598FE3F98CBC53968B9C857108C1F925ED99248059A915F7743B699B",
+    "bytes": 359
+  },
+  {
+    "path": "tests/Blast.Tests/packages.lock.json",
+    "sha256": "2AF3E5AA015BD2B4BC37728460053DB627A3EBD7E8CB293218BA0164659DD335",
+    "bytes": 2382
+  },
+  {
+    "path": "tests/Blast.Tests/Program.cs",
+    "sha256": "92E79A0798C028CC419778B94BCF42363340D041F7CCACCFB2F2C90BAD399EE1",
+    "bytes": 106111
+  }
+]

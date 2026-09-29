@@ -1,0 +1,3 @@
+CTRL_C_READY
+CTRL_C_RESULT:blast=ok;child=130;parent_handled=True;child_handled=True;session=complete
+WRAPPER_EXIT=0

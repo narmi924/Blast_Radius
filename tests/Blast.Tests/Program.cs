@@ -4,12 +4,15 @@ using Blast;
 
 if (args.Length > 0 && args[0] == "mutate") return Mutate(args);
 if (args.Length > 0 && args[0] == "mutate-nested") return MutateNested(args);
+if (args.Length > 0 && args[0] == "mutate-relative") return MutateRelative(args);
 if (args.Length > 0 && args[0] == "hold-lock") return HoldLock(args);
 if (args.Length > 0 && args[0] == "apply-worker") return ApplyWorker(args);
 if (args.Length > 0 && args[0] == "preview-worker") return PreviewWorker(args);
 if (args.Length > 0 && args[0] == "object-save-worker") return ObjectSaveWorker(args);
 if (args.Length > 0 && args[0] == "stdio-child") return StdioChild(args);
 if (args.Length > 0 && args[0] == "stdio-wrapper") return StdioWrapper(args);
+if (args.Length > 0 && args[0] == "ctrlc-child") return CtrlCChild(args);
+if (args.Length > 0 && args[0] == "ctrlc-wrapper") return CtrlCWrapper(args);
 if (args.Length > 0 && args[0] == "failfast-child") Environment.FailFast("Synthetic child failure.");
 if (args.Length > 0 && args[0] == "probe") return Probe();
 if (args.Length > 0 && args[0] == "demo") return Demo();
@@ -42,6 +45,19 @@ static int Mutate(string[] args)
             break;
         case "overwrite-rename":
             File.Move(a, Path.Combine(fixture.Root, "bravo.txt"), overwrite: true);
+            break;
+        case "cycle-three":
+            string second = Path.Combine(fixture.Root, "bravo.txt");
+            string third = Path.Combine(fixture.Root, "charlie.txt");
+            string temporary = Path.Combine(fixture.Root, "cycle.tmp");
+            File.Move(a, temporary);
+            File.Move(second, a);
+            File.Move(third, second);
+            File.Move(temporary, third);
+            break;
+        case "cross-parent-rename":
+            File.Move(Path.Combine(fixture.Root, "nested", "item.txt"),
+                Path.Combine(fixture.Root, "other", "item.txt"));
             break;
         case "move-to-excluded":
             File.Move(a, Path.Combine(fixture.Root, ".env"));
@@ -82,6 +98,21 @@ static int MutateNested(string[] args)
 {
     using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
     File.WriteAllText(Path.Combine(fixture.Root, "nested", "item.bin"), "after");
+    return 0;
+}
+
+static int MutateRelative(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    string path = Path.Combine(fixture.Root, args[3]);
+    switch (args.Length > 4 ? args[4] : "modify")
+    {
+        case "modify":
+        case "add": File.WriteAllText(path, "after"); break;
+        case "delete": File.Delete(path); break;
+        case "rename": File.Move(path, Path.Combine(Path.GetDirectoryName(path)!, "renamed.txt")); break;
+        default: throw new ArgumentException("Unknown relative fixture mutation.");
+    }
     return 0;
 }
 
@@ -166,6 +197,59 @@ static int StdioWrapper(string[] args)
     var run = engine.Run(command);
     Console.WriteLine($"WRAPPER_STATUS:{run.BlastStatus}:{run.ChildExitCode}");
     return run.BlastStatus == "ok" ? run.ChildExitCode ?? 3 : 4;
+}
+
+static int CtrlCChild(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        File.WriteAllText(Path.Combine(fixture.StateDirectory, "ctrlc-child-handled.signal"), "handled");
+        Environment.Exit(130);
+    };
+    File.WriteAllText(Path.Combine(fixture.StateDirectory, "ctrlc-child-ready.signal"), "ready");
+    Thread.Sleep(TimeSpan.FromSeconds(25));
+    return 0;
+}
+
+static int CtrlCWrapper(string[] args)
+{
+    if (Console.IsInputRedirected || Console.IsOutputRedirected)
+    {
+        Console.WriteLine("CTRL_C_BLOCKED: interactive console is not attached.");
+        if (args.Length > 1) File.WriteAllText(args[1], "CTRL_C_BLOCKED: interactive console is not attached.\n");
+        return 3;
+    }
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        File.WriteAllText(Path.Combine(fixture.StateDirectory, "ctrlc-parent-handled.signal"), "handled");
+    };
+    var notifier = Task.Run(() =>
+    {
+        string ready = Path.Combine(fixture.StateDirectory, "ctrlc-child-ready.signal");
+        for (int i = 0; i < 1000 && !File.Exists(ready); i++) Thread.Sleep(10);
+        if (File.Exists(ready)) Console.WriteLine("CTRL_C_READY");
+    });
+    var engine = new SessionEngine(fixture);
+    var command = new ProcessStartInfo(Environment.ProcessPath!);
+    command.ArgumentList.Add("ctrlc-child");
+    command.ArgumentList.Add(fixture.DirectoryPath);
+    command.ArgumentList.Add(fixture.WorkerToken);
+    var result = engine.Run(command);
+    notifier.GetAwaiter().GetResult();
+    bool parentHandled = File.Exists(Path.Combine(fixture.StateDirectory, "ctrlc-parent-handled.signal"));
+    bool childHandled = File.Exists(Path.Combine(fixture.StateDirectory, "ctrlc-child-handled.signal"));
+    string record = $"CTRL_C_RESULT:blast={result.BlastStatus};child={result.ChildExitCode};" +
+        $"parent_handled={parentHandled};child_handled={childHandled};" +
+        $"session={engine.Report(result.SessionId).Status}";
+    Console.WriteLine(record);
+    int exitCode = result.BlastStatus == "ok" && result.ChildExitCode == 130 && parentHandled && childHandled ? 0 : 1;
+    if (args.Length > 1) File.WriteAllText(args[1], "CTRL_C_READY\n" + record + "\nWRAPPER_EXIT=" + exitCode + "\n");
+    return exitCode;
 }
 
 static int Probe()
@@ -286,6 +370,16 @@ static int All(string? filter = null)
         ,("R4 newly added directory is unsupported", R4NewDirectory)
         ,("R4 new directory does not receive invented absent baseline", R4NewDirectoryFile)
         ,("R4 root replacement before apply conflicts", R4RootChangedBeforeApply)
+        ,("R4 root reparent at durable intent rejects mutation", R4RootReparentAtIntent)
+        ,("R4 intermediate reparent at durable intent rejects mutation", R4IntermediateReparentAtIntent)
+        ,("R4 ordinary nested file restores", R4OrdinaryNestedRestore)
+        ,("R4 root reparent blocks added removal", () => R4RootReparentOtherKind(ChangeKind.Added))
+        ,("R4 root reparent blocks deleted recreation", () => R4RootReparentOtherKind(ChangeKind.Deleted))
+        ,("R4 root reparent blocks simple rename", () => R4RootReparentOtherKind(ChangeKind.Renamed))
+        ,("three-name cycle is unsupported", ThreeNameCycleRejected)
+        ,("cross-parent rename is unsupported", CrossParentRenameRejected)
+        ,("cmd metacharacters reject before launch", CmdMetacharactersRejected)
+        ,("cmd raw arguments reject before launch", CmdRawArgumentsRejected)
         ,("missing object key preserves existing store", MissingObjectKey)
         ,("report separates supported kind from object integrity and apply state", ReportEligibility)
     };
@@ -1205,6 +1299,34 @@ static void CmdQuoteRejected()
         "Unsupported cmd argument launched the child.");
 }
 
+static void CmdMetacharactersRejected()
+{
+    using var fixture = SyntheticFixture.Create();
+    string script = Path.Combine(fixture.Root, "reject-metacharacters.cmd");
+    File.WriteAllText(script, "@echo off\r\necho ran>ran.signal\r\n");
+    var engine = new SessionEngine(fixture);
+    foreach (string value in new[] { "%PATH%", "!VAR!", "x^y", "x&y", "x|y", "x<y", "x>y", "x\ny" })
+    {
+        var command = new ProcessStartInfo(script);
+        command.ArgumentList.Add(value);
+        Throws<NotSupportedException>(() => engine.Run(command));
+        Check(!File.Exists(Path.Combine(fixture.Root, "ran.signal")),
+            "Rejected cmd metacharacter launched the child.");
+    }
+}
+
+static void CmdRawArgumentsRejected()
+{
+    using var fixture = SyntheticFixture.Create();
+    string script = Path.Combine(fixture.Root, "reject-raw.cmd");
+    File.WriteAllText(script, "@echo off\r\necho ran>ran.signal\r\n");
+    var command = new ProcessStartInfo(script) { Arguments = "safe" };
+    var engine = new SessionEngine(fixture);
+    Throws<NotSupportedException>(() => engine.Run(command));
+    Check(!File.Exists(Path.Combine(fixture.Root, "ran.signal")),
+        "Raw cmd argument bypassed the checked ArgumentList path.");
+}
+
 static void AbnormalChildExit()
 {
     using var fixture = SyntheticFixture.Create();
@@ -1502,6 +1624,179 @@ static void R4RecreatedParent()
     Check(!File.Exists(Path.Combine(parent, "item.bin")), "Parent-replacement test modified new directory.");
 }
 
+static void R4RootReparentAtIntent() => R4ReparentAtIntent(replaceRoot: true);
+
+static void R4IntermediateReparentAtIntent() => R4ReparentAtIntent(replaceRoot: false);
+
+static void R4OrdinaryNestedRestore()
+{
+    using var fixture = SyntheticFixture.Create();
+    string parent = Path.Combine(fixture.Root, "nested");
+    Directory.CreateDirectory(parent);
+    string file = Path.Combine(parent, "item.txt");
+    File.WriteAllText(file, "before");
+    var engine = new SessionEngine(fixture);
+    var command = new ProcessStartInfo(Environment.ProcessPath!);
+    command.ArgumentList.Add("mutate-relative");
+    command.ArgumentList.Add(fixture.DirectoryPath);
+    command.ArgumentList.Add(fixture.WorkerToken);
+    command.ArgumentList.Add(Path.Combine("nested", "item.txt"));
+    var run = engine.Run(command);
+    var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Modified);
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    var result = engine.Apply(plan.Id, plan.Hash);
+    Check(result.Status == "verified" && result.OperationsApplied == 1 && File.ReadAllText(file) == "before",
+        $"Ordinary nested restoration failed: {result.Status}; {result.Operations.Single().Message}");
+}
+
+static void R4RootReparentOtherKind(ChangeKind kind)
+{
+    using var fixture = SyntheticFixture.Create();
+    string parent = Path.Combine(fixture.Root, "nested");
+    Directory.CreateDirectory(parent);
+    string source = Path.Combine(parent, "item.txt");
+    if (kind != ChangeKind.Added) File.WriteAllText(source, "before");
+    FileIdentity oldRoot, oldParent;
+    using (var handle = WindowsFiles.OpenDirectory(fixture.Root)) oldRoot = WindowsFiles.Identity(handle);
+    using (var handle = WindowsFiles.OpenDirectory(parent)) oldParent = WindowsFiles.Identity(handle);
+    var engine = new SessionEngine(fixture);
+    var command = new ProcessStartInfo(Environment.ProcessPath!);
+    command.ArgumentList.Add("mutate-relative");
+    command.ArgumentList.Add(fixture.DirectoryPath);
+    command.ArgumentList.Add(fixture.WorkerToken);
+    command.ArgumentList.Add(Path.Combine("nested", "item.txt"));
+    command.ArgumentList.Add(kind switch
+    {
+        ChangeKind.Added => "add", ChangeKind.Deleted => "delete", ChangeKind.Renamed => "rename",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind))
+    });
+    var run = engine.Run(command);
+    Check(run.BlastStatus == "ok", "Fixture mutation did not finish.");
+    var change = OnlyChange(engine.Report(run.SessionId), kind);
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    string current = kind == ChangeKind.Renamed ? Path.Combine(parent, "renamed.txt") : source;
+    FileIdentity? currentIdentity = null;
+    if (kind != ChangeKind.Deleted)
+        using (var handle = WindowsFiles.OpenFile(current, write: false))
+            currentIdentity = WindowsFiles.Identity(handle);
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage != "intent_durable") return;
+        string oldWork = Path.Combine(fixture.DirectoryPath, "old-work");
+        Directory.Move(fixture.Root, oldWork);
+        Directory.CreateDirectory(fixture.Root);
+        Directory.Move(Path.Combine(oldWork, "nested"), parent);
+        FileIdentity rootNow, parentNow;
+        using (var handle = WindowsFiles.OpenDirectory(fixture.Root)) rootNow = WindowsFiles.Identity(handle);
+        using (var handle = WindowsFiles.OpenDirectory(parent)) parentNow = WindowsFiles.Identity(handle);
+        Check(rootNow.Index != oldRoot.Index && parentNow == oldParent,
+            "Root reparent identity precondition was not established.");
+        if (currentIdentity is FileIdentity expected)
+        {
+            using var handle = WindowsFiles.OpenFile(current, write: false);
+            Check(WindowsFiles.Identity(handle) == expected, "Current file identity changed in fixture.");
+        }
+        else Check(!File.Exists(current), "Deleted target unexpectedly exists in fixture.");
+    };
+    var result = engine.Apply(plan.Id, plan.Hash);
+    Check(result.OperationsApplied == 0 && result.Operations.Single().Status != "verified" &&
+          result.Operations.Single().Message!.Contains("directory identity", StringComparison.OrdinalIgnoreCase) &&
+          (kind == ChangeKind.Deleted ? !File.Exists(current) :
+           File.ReadAllText(current) == (kind == ChangeKind.Added ? "after" : "before")),
+        $"Reparented root allowed {kind} recovery: {result.Status}; {result.Operations.Single().Message}");
+}
+
+static void ThreeNameCycleRejected()
+{
+    using var fixture = SyntheticFixture.Create();
+    foreach (string name in new[] { "alpha", "bravo", "charlie" })
+        File.WriteAllText(Path.Combine(fixture.Root, name + ".txt"), name);
+    var engine = new SessionEngine(fixture);
+    var run = engine.Run(Child(fixture, "cycle-three"));
+    var report = engine.Report(run.SessionId);
+    Check(run.BlastStatus == "ok" && report.Changes?.Count == 3 &&
+          report.Changes.All(c => c.Kind == ChangeKind.Unsupported),
+        "Three-name identity cycle was split into executable changes.");
+    Throws<NotSupportedException>(() => engine.Preview(run.SessionId, report.Changes!.Select(c => c.Id)));
+    Check(File.ReadAllText(Path.Combine(fixture.Root, "alpha.txt")) == "bravo" &&
+          File.ReadAllText(Path.Combine(fixture.Root, "bravo.txt")) == "charlie" &&
+          File.ReadAllText(Path.Combine(fixture.Root, "charlie.txt")) == "alpha",
+        "Rejected cycle changed current files.");
+}
+
+static void CrossParentRenameRejected()
+{
+    using var fixture = SyntheticFixture.Create();
+    string first = Path.Combine(fixture.Root, "nested");
+    string second = Path.Combine(fixture.Root, "other");
+    Directory.CreateDirectory(first);
+    Directory.CreateDirectory(second);
+    File.WriteAllText(Path.Combine(first, "item.txt"), "before");
+    var engine = new SessionEngine(fixture);
+    var run = engine.Run(Child(fixture, "cross-parent-rename"));
+    var report = engine.Report(run.SessionId);
+    Check(run.BlastStatus == "ok" && report.Changes?.Count == 1 &&
+          report.Changes[0].Kind == ChangeKind.Unsupported,
+        "Cross-parent move became executable changes.");
+    Throws<NotSupportedException>(() => engine.Preview(run.SessionId, [report.Changes![0].Id]));
+    Check(!File.Exists(Path.Combine(first, "item.txt")) &&
+          File.ReadAllText(Path.Combine(second, "item.txt")) == "before",
+        "Rejected cross-parent move changed current files.");
+}
+
+static void R4ReparentAtIntent(bool replaceRoot)
+{
+    using var fixture = SyntheticFixture.Create();
+    string ancestor = replaceRoot ? fixture.Root : Path.Combine(fixture.Root, "middle");
+    string parent = Path.Combine(ancestor, "nested");
+    Directory.CreateDirectory(parent);
+    string file = Path.Combine(parent, "item.txt");
+    File.WriteAllText(file, "before");
+    FileIdentity originalAncestor, originalParent, originalFile;
+    using (var handle = WindowsFiles.OpenDirectory(ancestor)) originalAncestor = WindowsFiles.Identity(handle);
+    using (var handle = WindowsFiles.OpenDirectory(parent)) originalParent = WindowsFiles.Identity(handle);
+    using (var handle = WindowsFiles.OpenFile(file, write: false)) originalFile = WindowsFiles.Identity(handle);
+
+    var engine = new SessionEngine(fixture);
+    var command = new ProcessStartInfo(Environment.ProcessPath!);
+    command.ArgumentList.Add("mutate-relative");
+    command.ArgumentList.Add(fixture.DirectoryPath);
+    command.ArgumentList.Add(fixture.WorkerToken);
+    command.ArgumentList.Add(replaceRoot ? Path.Combine("nested", "item.txt") : Path.Combine("middle", "nested", "item.txt"));
+    var run = engine.Run(command);
+    Check(run.BlastStatus == "ok", "Nested fixture run did not finish.");
+    var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Modified);
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    bool rearranged = false;
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage != "intent_durable") return;
+        string oldAncestor = Path.Combine(fixture.DirectoryPath, replaceRoot ? "old-work" : "old-middle");
+        Directory.Move(ancestor, oldAncestor);
+        Directory.CreateDirectory(ancestor);
+        string restoredParent = Path.Combine(ancestor, "nested");
+        Directory.Move(Path.Combine(oldAncestor, "nested"), restoredParent);
+        FileIdentity newAncestor, sameParent, sameFile;
+        using (var handle = WindowsFiles.OpenDirectory(ancestor)) newAncestor = WindowsFiles.Identity(handle);
+        using (var handle = WindowsFiles.OpenDirectory(restoredParent)) sameParent = WindowsFiles.Identity(handle);
+        using (var handle = WindowsFiles.OpenFile(Path.Combine(restoredParent, "item.txt"), write: false))
+            sameFile = WindowsFiles.Identity(handle);
+        Check(newAncestor.Index != originalAncestor.Index &&
+              sameParent == originalParent && sameFile == originalFile &&
+              File.ReadAllText(Path.Combine(restoredParent, "item.txt")) == "after",
+            "The directory reparenting identity precondition was not established.");
+        rearranged = true;
+    };
+    var result = engine.Apply(plan.Id, plan.Hash);
+    Check(rearranged && result.OperationsApplied == 0 &&
+          result.Operations.Single().Status != "verified" &&
+          result.Operations.Single().Message!.Contains("directory identity", StringComparison.OrdinalIgnoreCase) &&
+          File.ReadAllText(file) == "after",
+        $"Reparented ancestor allowed restore or lacked a directory identity conflict: status={result.Status}, " +
+        $"applied={result.OperationsApplied}, operation={result.Operations.Single().Status}, " +
+        $"message={result.Operations.Single().Message}, content={File.ReadAllText(file)}.");
+}
+
 static void R5SameContentReplacement()
 {
     var (fixture, engine, report) = Setup("before", "delete");
@@ -1592,7 +1887,10 @@ static void R1CaptureSymlinkSwap()
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
             File.WriteAllText(target, "ordinary");
-            throw new TestBlockedException("Non-elevated symlink creation unavailable: " + ex.GetType().Name);
+            throw new TestBlockedException("Non-elevated symlink creation unavailable: " +
+                ex.GetType().Name + "; HResult=0x" + ex.HResult.ToString("X8") +
+                "; message=" + ex.Message +
+                (ex.InnerException is null ? "" : "; inner=" + ex.InnerException));
         }
         swapped = true;
     };

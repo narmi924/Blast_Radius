@@ -7,11 +7,20 @@ internal sealed class PathGuard : IDisposable
 {
     private readonly List<SafeFileHandle> handles = [];
     private readonly List<string> paths = [];
+    private readonly List<FileIdentity?> plannedIdentities = [];
+    private readonly string canonicalRoot;
+    private readonly string? scopeId;
+    private readonly IReadOnlyDictionary<string, FileIdentity>? expectedDirectories;
     internal FileIdentity ParentIdentity { get; private set; }
 
-    internal PathGuard(string root, string fullFilePath)
+    internal PathGuard(string root, string fullFilePath, string? scopeId = null,
+        IReadOnlyDictionary<string, FileIdentity>? expectedDirectories = null)
     {
-        string canonicalRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        if ((scopeId is null) != (expectedDirectories is null))
+            throw new ArgumentException("Scope and fixed directory identities must be provided together.");
+        this.scopeId = scopeId;
+        this.expectedDirectories = expectedDirectories;
+        canonicalRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
         string canonicalFile = Path.GetFullPath(fullFilePath);
         string relative = Path.GetRelativePath(canonicalRoot, canonicalFile);
         if (Path.IsPathRooted(relative) || relative == ".." ||
@@ -45,8 +54,25 @@ internal sealed class PathGuard : IDisposable
             handle.Dispose();
             throw new NotSupportedException("A protected parent is a reparse point.");
         }
+        FileIdentity? planned = null;
+        if (expectedDirectories is not null)
+        {
+            string key = scopeId + "|" + Path.GetRelativePath(canonicalRoot, path);
+            if (!expectedDirectories.TryGetValue(key, out var expected))
+            {
+                handle.Dispose();
+                throw new InvalidOperationException("Protected directory has no fixed-plan identity: " + key);
+            }
+            if (identity != expected)
+            {
+                handle.Dispose();
+                throw new InvalidOperationException("Protected directory identity differs from fixed plan: " + key);
+            }
+            planned = expected;
+        }
         handles.Add(handle);
         paths.Add(path);
+        plannedIdentities.Add(planned);
     }
 
     internal void Check()
@@ -57,6 +83,9 @@ internal sealed class PathGuard : IDisposable
             string expected = @"\\?\" + Path.GetFullPath(paths[i]);
             if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("A protected parent path moved while in use.");
+            if (plannedIdentities[i] is FileIdentity planned && WindowsFiles.Identity(handles[i]) != planned)
+                throw new IOException("Protected directory identity changed while in use: " +
+                    scopeId + "|" + Path.GetRelativePath(canonicalRoot, paths[i]));
         }
     }
 

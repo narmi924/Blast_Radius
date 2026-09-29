@@ -143,8 +143,10 @@ internal sealed class SessionEngine
     {
         command.WorkingDirectory = fixture.Root;
         command.UseShellExecute = false;
-        if (!command.FileName.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
-            command.ArgumentList.Count == 0) return;
+        if (!command.FileName.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)) return;
+        if (!string.IsNullOrEmpty(command.Arguments))
+            throw new NotSupportedException("Raw cmd argument strings cannot be validated; use ArgumentList.");
+        if (command.ArgumentList.Count == 0) return;
         // CreateProcess uses cmd.exe for batch files. Native argv backslash
         // quoting does not preserve cmd's argument semantics.
         string[] arguments = [.. command.ArgumentList];
@@ -600,7 +602,7 @@ internal sealed class SessionEngine
             try
             {
                 Prepare(session, change, plan, operation);
-                Execute(session, change, plan, operation);
+                Execute(session, change, plan, operation, execution);
                 applied++;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or
@@ -708,7 +710,8 @@ internal sealed class SessionEngine
         BoundaryForTest?.Invoke("intent_durable");
     }
 
-    private void Execute(SessionRecord session, ChangeRecord change, RestorePlan plan, RestoreOperation op)
+    private void Execute(SessionRecord session, ChangeRecord change, RestorePlan plan, RestoreOperation op,
+        PlanExecutionPayload execution)
     {
         op.Status = "executing";
         state.SavePlan(plan);
@@ -716,7 +719,8 @@ internal sealed class SessionEngine
         string currentKey = change.Kind == ChangeKind.Renamed ? change.Destination! : change.Path;
         var (currentScope, currentRelative) = Resolve(session, currentKey);
         string path = FileSystemScope.FullPath(currentScope.Root, currentRelative);
-        using var parents = new PathGuard(currentScope.Root, path);
+        using var parents = new PathGuard(currentScope.Root, path, currentScope.Id,
+            execution.BaselineDirectories);
         if (parents.ParentIdentity.Volume != change.Final.ParentVolume ||
             parents.ParentIdentity.Index != change.Final.ParentId)
             throw new InvalidOperationException("Parent identity changed.");

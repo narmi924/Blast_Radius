@@ -1,0 +1,4 @@
+PASS R4 root reparent blocks added removal
+PASS R4 root reparent blocks deleted recreation
+PASS R4 root reparent blocks simple rename
+RESULT: Passed=3 Failed=0 Skipped=0 Blocked=0

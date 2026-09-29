@@ -1,0 +1,2 @@
+PASS cmd raw arguments reject before launch
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0

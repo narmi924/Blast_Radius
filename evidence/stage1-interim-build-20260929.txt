@@ -1,0 +1,8 @@
+  Blast -> E:\Projects\Kaspi\Blast_Radius\src\Blast\bin\Debug\net10.0-windows\Blast.dll
+  Blast.Tests -> E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\bin\Debug\net10.0-windows\Blast.Tests.dll
+
+已成功生成。
+    0 个警告
+    0 个错误
+
+已用时间 00:00:01.15

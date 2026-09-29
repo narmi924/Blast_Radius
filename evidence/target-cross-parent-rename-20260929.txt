@@ -1,0 +1,2 @@
+PASS cross-parent rename is unsupported
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0

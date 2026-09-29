@@ -1,0 +1,6 @@
+FAIL R4 intermediate reparent at durable intent rejects mutation: System.Exception: Reparented ancestor allowed restore or lacked a directory identity conflict: status=verified, applied=1, operation=verified, message=, content=before.
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+   at Program.<<Main>$>g__Check|0_106(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1924
+   at Program.<<Main>$>g__R4ReparentAtIntent|0_87(Boolean replaceRoot) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1585
+   at Program.<<Main>$>g__R4IntermediateReparentAtIntent|0_85() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1518
+   at Program.<<Main>$>g__All|0_10(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 313

@@ -1,0 +1,5 @@
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL cmd raw arguments reject before launch: System.Exception: Expected NotSupportedException
+   at Program.<<Main>$>g__Throws|0_112[T](Action action) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 2085
+   at Program.<<Main>$>g__CmdRawArgumentsRejected|0_70() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1270
+   at Program.<<Main>$>g__All|0_10(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 341
