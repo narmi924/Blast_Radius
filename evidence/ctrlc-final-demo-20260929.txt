@@ -1,0 +1,4 @@
+session=aa23a1da57eb4b0fb8b4de076c408049 child_exit_code=0 blast_status=ok
+change_id=482E2FE97AFE54C750BC872E attribution=temporally_correlated plan_id=d88cb2720cb44d86884f97f3446e3471
+apply=verified operations_applied=1 restored=before
+DEMO_EXIT=0

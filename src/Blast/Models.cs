@@ -50,6 +50,11 @@ internal sealed class SessionRecord
     public List<ProtectionScope> Scopes { get; init; } = [];
     public required string Status { get; set; }
     public int? ChildExitCode { get; set; }
+    public int? ChildProcessId { get; set; }
+    public DateTimeOffset? FinalScanCompletedUtc { get; set; }
+    public int CancelRequests { get; set; }
+    public string ConsoleControlMode { get; set; } = "unknown";
+    public string? InterruptionReason { get; set; }
     public required Dictionary<string, FileState> Baseline { get; init; }
     public Dictionary<string, FileState>? Final { get; set; }
     public Dictionary<string, FileIdentity> BaselineDirectories { get; set; } = [];
@@ -113,7 +118,12 @@ internal sealed record PlanExecutionPayload(
 
 internal sealed record ApplyResult(string Status, int OperationsApplied, IReadOnlyList<RestoreOperation> Operations);
 
-internal sealed record RunResult(string SessionId, string BlastStatus, int? ChildExitCode);
+internal sealed record RunResult(string SessionId, string BlastStatus, int? ChildExitCode,
+    int? ChildProcessId = null, int CancelRequests = 0, string ConsoleControlMode = "unknown")
+{
+    // Callers must also inspect BlastStatus; child and Blast integer codes may collide.
+    internal int WrapperExitCode => BlastStatus == "ok" && ChildExitCode is int code ? code : 70;
+}
 
 internal sealed record ObjectAudit(IReadOnlyList<string> PendingEncryptedFiles,
     IReadOnlyList<string> UnreferencedPublishedObjects);

@@ -6,6 +6,7 @@ namespace Blast;
 
 internal sealed class StateStore
 {
+    internal static Action<SessionRecord>? BeforeSessionSaveForTest { get; set; }
     private readonly string directory;
     private readonly string database;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -70,6 +71,7 @@ internal sealed class StateStore
 
     internal void SaveSession(SessionRecord session)
     {
+        BeforeSessionSaveForTest?.Invoke(session);
         using var connection = Open();
         using var command = Command(connection, """
             INSERT INTO sessions(id,status,payload) VALUES($id,$status,$payload)
@@ -280,8 +282,12 @@ internal sealed class StateStore
         foreach (string id in sessionIds)
         {
             var session = LoadSession(id);
+            string previous = session.Status;
             session.Status = "interrupted";
             session.Coverage = "incomplete";
+            session.InterruptionReason = "unfinished_on_restart_from_" + previous;
+            session.CoverageDetail.ScanFailure = "No durable session completion was recorded; " +
+                "a direct child or background writer may still be running.";
             SaveSession(session);
         }
     }

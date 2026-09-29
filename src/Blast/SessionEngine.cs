@@ -23,9 +23,10 @@ internal sealed class SessionEngine
     internal StateStore State => state;
     internal ObjectStore Objects => objects;
 
-    internal RunResult Run(ProcessStartInfo command)
+    internal RunResult Run(ProcessStartInfo command, CancellationToken cancellationToken = default)
     {
         using var storeLock = state.AcquireLock();
+        using var cancellation = new RunCancellation(cancellationToken);
         state.AuditUnresolved();
         if (state.HasUnresolvedPlans())
             throw new InvalidOperationException("Unresolved restore intent blocks a new run in this state store.");
@@ -38,7 +39,23 @@ internal sealed class SessionEngine
         try
         {
             BoundaryForTest?.Invoke("before_baseline");
+            cancellation.ThrowIfRequested();
             baseline = CaptureScopes(fixture.Scopes, coverage, baselineDirectories);
+            cancellation.ThrowIfRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            coverage.ScanFailure = "Run cancelled before baseline became ready.";
+            var interrupted = new SessionRecord
+            {
+                Id = id, Root = fixture.Root, Scopes = [.. fixture.Scopes], Status = "interrupted",
+                Baseline = [], Coverage = "incomplete", CoverageDetail = coverage,
+                ConsoleControlMode = cancellation.ConsoleControlMode,
+                CancelRequests = cancellation.Requests,
+                InterruptionReason = "cancelled_during_baseline"
+            };
+            state.SaveSession(interrupted);
+            return RunOutcome(interrupted, "interrupted");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or System.ComponentModel.Win32Exception)
         {
@@ -46,10 +63,12 @@ internal sealed class SessionEngine
             var failed = new SessionRecord
             {
                 Id = id, Root = fixture.Root, Scopes = [.. fixture.Scopes], Status = "failed", Baseline = [],
-                Coverage = "failed", CoverageDetail = coverage
+                Coverage = "failed", CoverageDetail = coverage,
+                ConsoleControlMode = cancellation.ConsoleControlMode,
+                CancelRequests = cancellation.Requests
             };
             state.SaveSession(failed);
-            return new(id, "baseline_failed", null);
+            return RunOutcome(failed, "baseline_failed");
         }
         var boundScopes = fixture.Scopes.Select(scope =>
         {
@@ -60,22 +79,36 @@ internal sealed class SessionEngine
         {
             Id = id, Root = fixture.Root, Scopes = boundScopes, Status = "baselining", Baseline = baseline,
             BaselineDirectories = baselineDirectories,
+            ConsoleControlMode = cancellation.ConsoleControlMode,
             Coverage = baseline.Values.Any(x => x.Presence == Presence.Unknown) ? "failed" : "complete",
             CoverageDetail = coverage
         };
         state.SaveSession(session);
-        BoundaryForTest?.Invoke("baseline_saved");
+        try
+        {
+            BoundaryForTest?.Invoke("baseline_saved");
+            cancellation.ThrowIfRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            return InterruptRun(session, cancellation, "cancelled_during_baseline");
+        }
         if (session.Coverage != "complete")
         {
             session.Status = "failed";
             state.SaveSession(session);
-            return new(id, "baseline_failed", null);
+            return RunOutcome(session, "baseline_failed");
         }
         try
         {
             ValidateHistoricalDirectories(session);
             foreach (var file in baseline.Values.Where(x => x.Presence == Presence.Present))
                 objects.Verify(file.ObjectId!, file.Length);
+            cancellation.ThrowIfRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            return InterruptRun(session, cancellation, "cancelled_before_child_start");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or CryptographicException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -83,34 +116,66 @@ internal sealed class SessionEngine
             session.Coverage = "failed";
             session.CoverageDetail.ScanFailure = "Baseline object verification: " + ex.GetType().Name;
             state.SaveSession(session);
-            return new(id, "baseline_failed", null);
+            return RunOutcome(session, "baseline_failed");
         }
         session.Status = "ready";
         state.SaveSession(session);
-        BoundaryForTest?.Invoke("ready");
+        try
+        {
+            BoundaryForTest?.Invoke("ready");
+            cancellation.ThrowIfRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            return InterruptRun(session, cancellation, "cancelled_before_child_start");
+        }
 
         try
         {
+            cancellation.ThrowIfRequested();
             using var child = Process.Start(command) ?? throw new IOException("Child process did not start.");
+            session.ChildProcessId = child.Id;
             session.Status = "running";
             state.SaveSession(session);
-            child.WaitForExit();
+            BoundaryForTest?.Invoke("child_started");
+            long? cancellationSeenAt = null;
+            while (!child.WaitForExit(50))
+            {
+                if (cancellation.Requests == 0) continue;
+                cancellationSeenAt ??= Environment.TickCount64;
+                if (Environment.TickCount64 - cancellationSeenAt < 5000) continue;
+                if (child.HasExited) break;
+                return InterruptRun(session, cancellation, "child_did_not_exit_within_5s_after_cancel");
+            }
             session.ChildExitCode = child.ExitCode;
+        }
+        catch (OperationCanceledException)
+        {
+            return InterruptRun(session, cancellation,
+                session.ChildProcessId is null ? "cancelled_before_child_start" : "cancelled_with_child_running");
         }
         catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
         {
             session.Status = "failed";
+            session.Coverage = "incomplete";
+            session.CoverageDetail.ScanFailure = "Child launch or wait failed: " + ex.GetType().Name;
+            session.CancelRequests = cancellation.Requests;
             state.SaveSession(session);
-            return new(id, "launch_failed", null);
+            return RunOutcome(session, "launch_failed");
         }
 
+        int requestsAtChildExit = cancellation.Requests;
         try
         {
             session.Status = "finalizing";
             state.SaveSession(session);
             BoundaryForTest?.Invoke("before_final_scan");
+            if (cancellation.Requests != requestsAtChildExit)
+                throw new OperationCanceledException("Cancellation requested after child exit.");
             var finalDirectories = new Dictionary<string, FileIdentity>(StringComparer.OrdinalIgnoreCase);
             var final = CaptureScopes(session.Scopes, directories: finalDirectories);
+            if (cancellation.Requests != requestsAtChildExit)
+                throw new OperationCanceledException("Cancellation requested during final scan.");
             foreach (string path in baseline.Keys.Except(final.Keys, StringComparer.OrdinalIgnoreCase))
                 final[path] = Capture(session, path).State;
             foreach (string path in final.Keys.Except(baseline.Keys, StringComparer.OrdinalIgnoreCase))
@@ -126,18 +191,45 @@ internal sealed class SessionEngine
             session.Coverage = directoriesChanged || final.Values.Any(x => x.Presence == Presence.Unknown)
                 ? "incomplete" : "complete";
             session.Changes = BuildChanges(session);
+            session.FinalScanCompletedUtc = DateTimeOffset.UtcNow;
+            BoundaryForTest?.Invoke("before_final_commit");
+            if (!cancellation.TryFinish(requestsAtChildExit))
+                throw new OperationCanceledException("Cancellation requested before final commit.");
+            // After this point, a new Ctrl+C may terminate Blast. A persisted
+            // finalizing state remains safe if that happens before the commit.
+            session.CancelRequests = cancellation.Requests;
             session.Status = session.Coverage == "complete" ? "complete" : "incomplete";
             state.SaveSession(session);
-            return new(id, session.Status == "complete" ? "ok" : "final_scan_incomplete", session.ChildExitCode);
+            return RunOutcome(session, session.Status == "complete" ? "ok" : "final_scan_incomplete");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or UnauthorizedAccessException or
+                                   NotSupportedException or System.ComponentModel.Win32Exception)
         {
-            session.Status = "incomplete";
+            bool interrupted = ex is OperationCanceledException || cancellation.Requests != requestsAtChildExit;
+            session.Status = interrupted ? "interrupted" : "incomplete";
             session.Coverage = "incomplete";
+            session.InterruptionReason = interrupted ? "cancelled_during_final_scan" : null;
+            session.CoverageDetail.ScanFailure = ex.GetType().Name + ": " + ex.Message;
+            session.CancelRequests = cancellation.Requests;
             state.SaveSession(session);
-            return new(id, "final_scan_failed", session.ChildExitCode);
+            return RunOutcome(session, interrupted ? "interrupted" : "final_scan_failed");
         }
     }
+
+    private RunResult InterruptRun(SessionRecord session, RunCancellation cancellation, string reason)
+    {
+        session.Status = "interrupted";
+        session.Coverage = "incomplete";
+        session.InterruptionReason = reason;
+        session.CoverageDetail.ScanFailure = reason;
+        session.CancelRequests = cancellation.Requests;
+        state.SaveSession(session);
+        return RunOutcome(session, "interrupted");
+    }
+
+    private static RunResult RunOutcome(SessionRecord session, string blastStatus) =>
+        new(session.Id, blastStatus, session.ChildExitCode, session.ChildProcessId,
+            session.CancelRequests, session.ConsoleControlMode);
 
     private void NormalizeCommand(ProcessStartInfo command)
     {
@@ -409,6 +501,12 @@ internal sealed class SessionEngine
             session_id = session.Id,
             blast_status = session.Status,
             child_exit_code = session.ChildExitCode,
+            child_process_id = session.ChildProcessId,
+            final_scan_completed_utc = session.FinalScanCompletedUtc,
+            background_processes = "untracked",
+            cancel_requests = session.CancelRequests,
+            console_control_mode = session.ConsoleControlMode,
+            interruption_reason = session.InterruptionReason,
             coverage = session.Coverage,
             coverage_detail = session.CoverageDetail,
             rule_version = session.RuleVersion,
@@ -452,7 +550,8 @@ internal sealed class SessionEngine
         var session = Report(sessionId);
         var builder = new StringBuilder();
         builder.AppendLine($"Session {session.Id}: {session.Status}; coverage={session.Coverage}; child exit={session.ChildExitCode}");
-        builder.AppendLine("Event history: unavailable; changes are final-state differences only.");
+        builder.AppendLine("Event history: unavailable; changes are final-state differences only. " +
+            "Background processes are not tracked after the direct child exits.");
         foreach (var change in session.Changes ?? [])
             builder.AppendLine($"{change.Id} {change.Kind} {EscapeControl(change.Path)} [{change.Attribution}]");
         return builder.ToString();

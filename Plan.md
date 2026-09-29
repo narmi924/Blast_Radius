@@ -1,6 +1,6 @@
 # Blast Radius 开发计划
 
-> 版本 0.6；核验日期：2026-09-29（Asia/Singapore）。0.2 已获批准，阶段 1 `In progress`；阶段 2–4 `Todo`。实现状态和实测证据在第 10 节更新，不以文档设计代替测试结果。
+> 版本 0.7；核验日期：2026-09-29（Asia/Singapore）。0.2 已获批准，阶段 1 `In progress`；阶段 2–4 `Todo`。实现状态和实测证据在第 10 节更新，不以文档设计代替测试结果。
 
 ## 1. 当前目标、场景与承诺
 
@@ -178,6 +178,8 @@ required 集合由**会话开始前固定的纳入规则减去明确排除规则
 
 JSON 的顶层需 `schema_version`、`session_id`、`child_exit_code`、`blast_status`、`coverage`、`changes`（含 change ID、归因和恢复资格）、`event_history`、`errors`、`restore_plan`（如有）与 `operations_applied`。`blast run` 在 Blast 自身完整收尾且可报告时，把子进程退出码作为 CLI 退出码透传（包括非零）；Blast 的基线、监控/收尾、持久化等自身失败优先返回 Blast 错误码，并同时在 JSON 保留已知 `child_exit_code`。子进程未启动则为 null。两种整数空间**不承诺互不碰撞**，调用方须看 `blast_status` 与 `child_exit_code` 字段辨别来源。阶段 1 定稿并测试具体错误码、schema fixture，以及零项执行的 `no operations applied` 语义。默认不上传或打开外部 URL，不录制完整终端。模拟 `.exe` 和 `.cmd`、参数空格/引号、Ctrl+C、退出码必测。
 
+**阶段 1 共用命令生命周期与取消规则**：`SessionEngine.Run` 负责注册及释放 `Console.CancelKeyPress` 处理器；回调只设置 `Cancel=true` 并记录请求次数，不扫描、不写数据库、不自行向控制台广播 Ctrl+C。Windows 控制台会把键盘事件交给共享控制台的进程；`GenerateConsoleCtrlEvent(CTRL_C_EVENT)` 不能可靠只定向一个进程组，因此不以它模拟定向转发。[.NET `CancelKeyPress`](https://learn.microsoft.com/en-us/dotnet/api/system.console.cancelkeypress?view=net-10.0)、[Windows `GenerateConsoleCtrlEvent`](https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent)、[控制台处理器与关闭超时](https://learn.microsoft.com/en-us/windows/console/handlerroutine)于 2026-09-29 核对。基线与启动前收到取消时持久标 `interrupted`、`coverage=incomplete`、`child_exit_code=null`，不启动子进程；结束扫描期间新取消也不得提交 `complete`。子进程运行期间记录第一次及重复请求，既不重复人工发送信号，也不重置等待期限；直接子进程在取消后 5 秒仍未退出则记录 PID、`interrupted` 和未知退出码，返回 Blast 错误码 70，不自动杀进程树或宣称停止后台写入。子进程已退出且完整扫描/持久提交成功时，透传其**实际**退出码；收尾失败以 Blast 码 70 优先，同时保留已知 `child_exit_code`。两种码可碰撞，仍须看状态字段。输入重定向或无可用键盘控制台时不宣称键盘 Ctrl+C 支持；程序化取消仍可进入同一生命周期。输出重定向与 stdin/stdout 传递单独测试。终端关闭或包装器强制终止不保证运行中收尾，下次审计把未完成 `baselining/ready/running/finalizing` 标成 `interrupted`；可能存活的直接子进程及后台写入必须显式提示。`complete` 仅表示直接子进程退出后的一次最终扫描及持久提交，报告扫描时间与 `background_processes=untracked`，不表示整个进程树静止。
+
 ## 10. 阶段任务、依赖与验收
 
 | 阶段 | 状态 | 依赖与工作 | 验收证据（完成时填实际命令/结果） |
@@ -192,18 +194,19 @@ JSON 的顶层需 `schema_version`、`session_id`、`child_exit_code`、`blast_s
 
 | 项目 | 实际结果 | 尚缺 |
 |---|---|---|
-| 本机与依赖 | Windows 11 build 26200 x64；E: 本地 NTFS；SDK 10.0.303，runtime 10.0.12；Git 2.45.1.windows.1；Microsoft.Data.Sqlite 10.0.12，ProtectedData 10.0.0。SDK 已由 `global.json` 指定；依赖锁文件已由 restore 生成。本轮固定源码摘要见 `evidence/stage1-r4-source-tree-sha256-20260929.txt`；连续构建为 0 警告、0 错误，`--no-build` 全量测试为 Passed=90、Failed=0、Skipped=0、Blocked=1，执行器因 Blocked 返回 1。原始输出见 `evidence/stage1-r4-final-build-20260929.txt` 与 `evidence/stage1-r4-final-tests-20260929.txt`。 | 非提权符号链接夹具未建立，IOException HResult `0x80070522`；未做安装包、其他机器或其他卷验证。 |
+| 本机与依赖 | Windows 11 build 26200 x64；E: 本地 NTFS；SDK 10.0.303，runtime 10.0.12；Git 2.45.1.windows.1；Microsoft.Data.Sqlite 10.0.12，ProtectedData 10.0.0。SDK 已由 `global.json` 指定；依赖锁文件已由 restore 生成。本轮固定源码摘要见 `evidence/ctrlc-source-tree-sha256-20260929.txt`；连续构建为 0 警告、0 错误，`--no-build` 全量测试为 Passed=98、Failed=0、Skipped=0、Blocked=1，执行器因 Blocked 返回 1。原始输出见 `evidence/ctrlc-final-build-20260929.txt` 与 `evidence/ctrlc-final-tests-20260929.txt`。 | 非提权符号链接夹具未建立，IOException HResult `0x80070522`；未做安装包、其他机器或其他卷验证。 |
 | NTFS 原语 | `dotnet run --project tests/Blast.Tests -- probe`：只读属性目录句柄允许父目录移动；包含 DELETE 权限且不共享删除的句柄阻止本机测试移动；句柄级改名和删除在临时 E: NTFS 文件通过。 | 这不是跨所有并发时序/重解析路径的形式证明；普通用户受保护目录可能取不到 DELETE 句柄，必须拒绝。 |
-| 合成链路 | 内部测试入口覆盖基线→子进程→结束扫描→报告→显式选择/固定计划→安全副本/intent→修改、新增、删除、简单重命名→验证；另测二进制和既有嵌套目录。required 读取失败、不支持项、基线对象损坏均阻止子进程启动；结束扫描读取失败为 Unknown；`.gitignore` 不决定备份范围。显式同卷外部文件/目录分别有恢复测试，单文件邻居未纳入；scope ID 与相对路径分开。组选择不全拒绝、整组预检冲突零执行、执行中失败报告已验证项数。每项测试名与结果见 `evidence/acceptance-map.md`。 | 内部测试可逐项调用尚在验证的恢复实现；阶段 1 验收仍须对应测试全部通过。`.cmd` 中含引号参数目前启动前拒绝；默认 Ctrl+C 包装行为、长路径/别名/ACL 等未验证。系统崩溃/断电未测。 |
+| 合成链路 | 内部测试入口覆盖基线→子进程→结束扫描→报告→显式选择/固定计划→安全副本/intent→修改、新增、删除、简单重命名→验证；另测二进制和既有嵌套目录。required 读取失败、不支持项、基线对象损坏均阻止子进程启动；结束扫描读取失败为 Unknown；`.gitignore` 不决定备份范围。显式同卷外部文件/目录分别有恢复测试，单文件邻居未纳入；scope ID 与相对路径分开。组选择不全拒绝、整组预检冲突零执行、执行中失败报告已验证项数。每项测试名与结果见 `evidence/acceptance-map.md`。 | 内部测试可逐项调用尚在验证的恢复实现；阶段 1 验收仍须对应测试全部通过。`.cmd` 中含引号参数目前启动前拒绝；长路径/别名/ACL 与真实终端关闭未验证。系统崩溃/断电未测。 |
 | 互斥与诊断 | 独占状态文件句柄使并行 apply 返回 busy；持锁进程终止后可重获锁。实测恢复执行器在修改、改名及验证之间保留父目录保护，对普通修改保留目标活句柄；父目录移动及目标替换竞态测试通过。审计未决 intent 或丢失安全副本后，后续新计划 apply 和新 run 保守阻断。对象发布、计划记录、安全副本、intent、目标修改、验证后的进程终止均有测试。 | 对象发布目录元数据与 SQLite/对象/目标跨资源断电耐久未证明；未决库目前全库阻断，尚无核验后解除阻断的工作流。 |
 | 真实数据门槛 | 普通 `run`/`undo`/`report` 继续拒绝任意用户目录；`doctor` 报告 `disabled_pending_real_data_gate`。内部 `demo` 可重复输出一项修改恢复和 `operations_applied=1`。 | 合成对象虽采用 AES-GCM 和当前用户 DPAPI 包装密钥，真实目录的权限、ACL/元数据、完整暂存/故障清理与隐私审查未完成；不得开放普通 CLI。同用户 Agent 不受 DPAPI 隔离。 |
 | R1–R6 静态审查后的实测与修复 | 先加入确定性合成回归，本机原始红灯见 `evidence/review-r1-r5-before-20260929.txt`；该文件有 8 项失败断言，不能归为审查方已复现。修复后，R1 句柄绑定的最终路径、属性、硬链接/重解析及 ADS 检查；R2 固定计划执行载荷与中断审计；R3 默认数据流限制；R4 根及既有父目录身份历史；R5 `CreateNew` 后保留目标句柄直到验证；R6 新密文对象发布四个边界的进程终止诊断，分别有通过测试。详见 `evidence/acceptance-map.md`。 | R1 符号链接交换夹具因本机非提权创建失败为 Blocked；进程终止不证明断电耐久；R6 已诊断孤立密文对象，自动清理与真实数据门槛仍未验收。 |
 | R4 最终执行与命令包装复查 | 在 `intent_durable` 重排根或中间祖先，保留直接父目录及 A 文件身份的两项回归：原执行器实际 `verified`、执行 1 项并写回 B；修复后均零项执行，明确目录身份冲突。普通嵌套修改恢复及新增/删除/简单重命名的根替换拒绝通过。三文件循环和跨父目录重命名拒绝通过；`.cmd` 原始 `Arguments` 绕过检查先失败再修复为启动前拒绝。证据见 `evidence/r4-red-*.txt`、`evidence/r4-green-*.txt`、`evidence/cmd-raw-red-20260929.txt`、本轮最终测试输出。 | 原始第一次夹具因自身保持独占文件句柄得到共享冲突，不计作漏洞复现；修正夹具后才得到上述红灯。`.cmd` 含引号参数继续拒绝。 |
-| 交互 Ctrl+C 合成实验 | 在本机 PTY 中运行合成包装器并发送 Ctrl+C；父、子进程处理器均记录事件，子进程退出 130，包装器记录 `blast=ok`、`session=complete`、自身退出 0，见 `evidence/ctrlc-pty-20260929.txt`。 | 测试包装器显式安装 `CancelKeyPress` 处理器；默认包装行为及普通 CLI 交互入口尚未验证。PTY 宿主 shell 因 Ctrl+C 返回 1，不等于包装器自身退出码。 |
+| 0.6 交互 Ctrl+C 旧实验 | 在本机 PTY 中运行合成包装器并发送 Ctrl+C；测试包装器自身安装处理器，子进程退出 130，见 `evidence/ctrlc-pty-20260929.txt`。 | 此旧实验不能证明共用路径；0.7 的新实验与结果见下一行。 |
+| 共用包装生命周期与三层退出结果 | `RunCancellation` 的处理器只通知，`SessionEngine.Run` 正常线程进行基线、5 秒有界等待、扫描和持久提交；`RunResult.WrapperExitCode` 成功透传 child 实际码，自身失败返回 70。重定向包装实测 child=17、wrapper=17、测试通过；收尾失败实测 child=23、wrapper=70、测试通过。真实 PTY 外部 Ctrl+C：子进程显式处理时 child/wrapper=130；默认子进程处理时本机 child/wrapper=`-1073741510`；监督进程读取外层测试进程的实际 ExitCode=0，见 `evidence/ctrlc-controlled-supervised-final-20260929.txt` 与 `evidence/ctrlc-default-supervised-final-20260929.txt`。基线取消、扫描取消、取消后扫描失败、无响应子进程、处理器释放和重复运行、包装器终止后审计、最终提交失败及持续持久化失败均有合成测试。逐项见 `evidence/acceptance-map.md`。 | 终端关闭本身未实测；已验证的是被测包装器进程终止后的重启审计。5 秒超时不自动管理进程树，直接子进程和后台写入可能继续。普通用户目录入口仍关闭；真实数据门槛未过。 |
 
 清理记录：一次早期 Git 夹具测试在修复只读 `.git` 对象清理逻辑前失败，留下自动生成的 `E:\BlastRadiusFixture-f7468797a55b4cbd8929971838decb5b`。后续夹具清理测试通过；对这一个遗留目录的递归删除命令被自动执行策略拒绝，未改动该目录，待在允许的清理环境中处理。它仅含测试合成数据，不计作受保护用户目录。
 
-测试全部用本轮自动创建的临时目录和假数据，不删除真实文件、不读凭据、不改真实自启动或全局包。测试工具内部可以逐项调用尚在验证的恢复实现；这不等于阶段 1 apply 验收完成，也不开放普通用户目录。阶段 1 余项 `Todo/Blocked`：`.cmd` 带引号参数准确传递（现明确拒绝）；未装专门处理器时的 Ctrl+C 默认包装行为与普通 CLI 交互入口；缺失目录重建的进一步拒绝矩阵；更完整的长路径、路径别名、权限/ACL 与 Win32 失败后审计矩阵；持久对象目录元数据、真实数据加密/权限/明文暂存及隐私门槛；系统崩溃/断电独立验证。名称交换、三名称循环、覆盖式和跨父目录重命名已有明确拒绝测试。各项是否已测以 `evidence/acceptance-map.md` 和原始输出为准，不用新增测试数量替代验收完成度。阶段 1 **仍为 In progress**。
+测试全部用本轮自动创建的临时目录和假数据，不删除真实文件、不读凭据、不改真实自启动或全局包。测试工具内部可以逐项调用尚在验证的恢复实现；这不等于阶段 1 apply 验收完成，也不开放普通用户目录。阶段 1 余项 `Todo/Blocked`：`.cmd` 带引号参数准确传递（现明确拒绝）；真实终端关闭及后台写入/子进程树边界的进一步验证；缺失目录重建的进一步拒绝矩阵；更完整的长路径、路径别名、权限/ACL 与 Win32 失败后审计矩阵；持久对象目录元数据、真实数据加密/权限/明文暂存及隐私门槛；系统崩溃/断电独立验证。名称交换、三名称循环、覆盖式和跨父目录重命名已有明确拒绝测试。各项是否已测以 `evidence/acceptance-map.md` 和原始输出为准，不用新增测试数量替代验收完成度。阶段 1 **仍为 In progress**。
 
 ## 11. 主要风险、待验证假设与阻碍
 
@@ -243,3 +246,4 @@ USN 整卷观察、ETW 进程/文件/网络事件、敏感读取审计、注册�
 | 0.4 | 2026-09-29 | 阶段 1 继续：恢复执行器句柄生命周期、未决审计阻断、required 覆盖、显式同卷外部 scope、关联组与进程终止边界、包装测试；保持真实目录入口关闭。 | `evidence/` 保存本轮固定源码构建、`--no-build` 全量测试、逐项结果与验收对应；阶段 1 仍 In progress。 |
 | 0.5 | 2026-09-29 | 对 R1–R6 先做本机合成回归，再修句柄检查、计划载荷、ADS、目录身份、删除恢复验证和对象发布审计；保留成功恢复路径与真实目录入口限制。 | 本轮原始红灯/构建/测试、逐项映射及源码摘要位于 `evidence/`；80 Passed、0 Failed、1 Blocked，阶段 1 仍 In progress。 |
 | 0.6 | 2026-09-29 | R4 最终执行句柄链逐级绑定固定计划历史目录身份；补 `.cmd` 原始参数拒绝、三文件循环和跨父目录重命名拒绝，并实测带处理器的 PTY Ctrl+C。 | 修正夹具后的本机前后对照、最终构建与 90 Passed/0 Failed/1 Blocked 输出位于 `evidence/`；阶段 1 仍 In progress。 |
+| 0.7 | 2026-09-29 | 把取消处理与退出码决策放入共用 `SessionEngine.Run` 路径，保守处理基线/收尾取消、无响应与重启审计；实测生产路径的真实终端 Ctrl+C。 | 原始构建、98 Passed/0 Failed/1 Blocked 全量测试、两种真实终端退出结果与逐测试映射在 `evidence/`；阶段 1 仍 In progress。 |

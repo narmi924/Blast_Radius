@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using Blast;
 
 if (args.Length > 0 && args[0] == "mutate") return Mutate(args);
@@ -12,7 +13,12 @@ if (args.Length > 0 && args[0] == "object-save-worker") return ObjectSaveWorker(
 if (args.Length > 0 && args[0] == "stdio-child") return StdioChild(args);
 if (args.Length > 0 && args[0] == "stdio-wrapper") return StdioWrapper(args);
 if (args.Length > 0 && args[0] == "ctrlc-child") return CtrlCChild(args);
+if (args.Length > 0 && args[0] == "ctrlc-default-child") return CtrlCDefaultChild(args);
 if (args.Length > 0 && args[0] == "ctrlc-wrapper") return CtrlCWrapper(args);
+if (args.Length > 0 && args[0] == "ctrlc-terminal-harness") return CtrlCTerminalHarness(args);
+if (args.Length > 0 && args[0] == "ctrlc-terminal-supervisor") return CtrlCTerminalSupervisor(args);
+if (args.Length > 0 && args[0] == "run-worker") return RunWorker(args);
+if (args.Length > 0 && args[0] == "failure-wrapper") return FailureWrapper(args);
 if (args.Length > 0 && args[0] == "failfast-child") Environment.FailFast("Synthetic child failure.");
 if (args.Length > 0 && args[0] == "probe") return Probe();
 if (args.Length > 0 && args[0] == "demo") return Demo();
@@ -74,6 +80,14 @@ static int Mutate(string[] args)
         case "mark":
             File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"), "started");
             break;
+        case "exit-23":
+            File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"), "started");
+            return 23;
+        case "hang":
+            File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"),
+                Environment.ProcessId.ToString());
+            Thread.Sleep(TimeSpan.FromSeconds(30));
+            break;
         case "external-modify-add":
             File.WriteAllText(Path.Combine(fixture.DirectoryPath, "outside-file", "chosen.txt"), "after external");
             File.WriteAllText(Path.Combine(fixture.DirectoryPath, "outside-dir", "new.txt"), "new external");
@@ -124,6 +138,32 @@ static int HoldLock(string[] args)
     File.WriteAllText(Path.Combine(fixture.StateDirectory, "held.signal"), "held");
     Thread.Sleep(TimeSpan.FromSeconds(30));
     return 0;
+}
+
+static int RunWorker(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    var engine = new SessionEngine(fixture);
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage == "child_started")
+            File.WriteAllText(Path.Combine(fixture.StateDirectory, "wrapper-running.signal"), "running");
+    };
+    var result = engine.Run(Child(fixture, "hang"));
+    return result.WrapperExitCode;
+}
+
+static int FailureWrapper(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    var engine = new SessionEngine(fixture);
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage == "before_final_scan") throw new IOException("Synthetic wrapper final-scan failure.");
+    };
+    var result = engine.Run(Child(fixture, "exit-23"));
+    Console.WriteLine($"FAILURE_WRAPPER child={result.ChildExitCode} blast={result.BlastStatus}");
+    return result.WrapperExitCode;
 }
 
 static int ApplyWorker(string[] args)
@@ -195,8 +235,8 @@ static int StdioWrapper(string[] args)
     command.ArgumentList.Add("space value");
     command.ArgumentList.Add("quoted \"value\"");
     var run = engine.Run(command);
-    Console.WriteLine($"WRAPPER_STATUS:{run.BlastStatus}:{run.ChildExitCode}");
-    return run.BlastStatus == "ok" ? run.ChildExitCode ?? 3 : 4;
+    Console.WriteLine($"WRAPPER_STATUS:{run.BlastStatus}:{run.ChildExitCode}:{run.ConsoleControlMode}");
+    return run.WrapperExitCode;
 }
 
 static int CtrlCChild(string[] args)
@@ -213,43 +253,153 @@ static int CtrlCChild(string[] args)
     return 0;
 }
 
+static int CtrlCDefaultChild(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    File.WriteAllText(Path.Combine(fixture.StateDirectory, "ctrlc-child-ready.signal"), "ready");
+    Thread.Sleep(TimeSpan.FromSeconds(25));
+    return 0;
+}
+
 static int CtrlCWrapper(string[] args)
 {
-    if (Console.IsInputRedirected || Console.IsOutputRedirected)
-    {
-        Console.WriteLine("CTRL_C_BLOCKED: interactive console is not attached.");
-        if (args.Length > 1) File.WriteAllText(args[1], "CTRL_C_BLOCKED: interactive console is not attached.\n");
-        return 3;
-    }
     using var fixture = SyntheticFixture.Create();
     File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
-    Console.CancelKeyPress += (_, e) =>
-    {
-        e.Cancel = true;
-        File.WriteAllText(Path.Combine(fixture.StateDirectory, "ctrlc-parent-handled.signal"), "handled");
-    };
     var notifier = Task.Run(() =>
     {
         string ready = Path.Combine(fixture.StateDirectory, "ctrlc-child-ready.signal");
         for (int i = 0; i < 1000 && !File.Exists(ready); i++) Thread.Sleep(10);
-        if (File.Exists(ready)) Console.WriteLine("CTRL_C_READY");
+        if (File.Exists(ready)) File.WriteAllText(args[2], "ready");
     });
     var engine = new SessionEngine(fixture);
     var command = new ProcessStartInfo(Environment.ProcessPath!);
-    command.ArgumentList.Add("ctrlc-child");
+    command.ArgumentList.Add(args.Length > 3 && args[3] == "default" ? "ctrlc-default-child" : "ctrlc-child");
     command.ArgumentList.Add(fixture.DirectoryPath);
     command.ArgumentList.Add(fixture.WorkerToken);
     var result = engine.Run(command);
     notifier.GetAwaiter().GetResult();
-    bool parentHandled = File.Exists(Path.Combine(fixture.StateDirectory, "ctrlc-parent-handled.signal"));
     bool childHandled = File.Exists(Path.Combine(fixture.StateDirectory, "ctrlc-child-handled.signal"));
-    string record = $"CTRL_C_RESULT:blast={result.BlastStatus};child={result.ChildExitCode};" +
-        $"parent_handled={parentHandled};child_handled={childHandled};" +
-        $"session={engine.Report(result.SessionId).Status}";
-    Console.WriteLine(record);
-    int exitCode = result.BlastStatus == "ok" && result.ChildExitCode == 130 && parentHandled && childHandled ? 0 : 1;
-    if (args.Length > 1) File.WriteAllText(args[1], "CTRL_C_READY\n" + record + "\nWRAPPER_EXIT=" + exitCode + "\n");
-    return exitCode;
+    int handlersAfterFirst = RunCancellation.ActiveConsoleHandlersForTest;
+    var firstSession = engine.Report(result.SessionId);
+    var second = engine.Run(Child(fixture, "mark"));
+    int handlersAfterSecond = RunCancellation.ActiveConsoleHandlersForTest;
+    var record = new
+    {
+        result.BlastStatus, result.ChildExitCode, result.CancelRequests, result.ConsoleControlMode,
+        SessionStatus = firstSession.Status,
+        FinalScanCompleted = firstSession.FinalScanCompletedUtc is not null,
+        ChildHandled = childHandled,
+        HandlersAfterFirst = handlersAfterFirst,
+        SecondBlastStatus = second.BlastStatus,
+        SecondChildExitCode = second.ChildExitCode,
+        HandlersAfterSecond = handlersAfterSecond
+    };
+    File.WriteAllText(args[1], JsonSerializer.Serialize(record));
+    return result.WrapperExitCode;
+}
+
+static int CtrlCTerminalHarness(string[] args)
+{
+    if (Console.IsInputRedirected || Console.IsOutputRedirected)
+    {
+        Console.WriteLine("BLOCKED: interactive console is not attached.");
+        return 3;
+    }
+    string resultPath = Path.GetFullPath(args[1]);
+    bool defaultChild = args.Length > 2 && args[2] == "default";
+    string wrapperRecord = resultPath + ".wrapper.json";
+    string ready = resultPath + ".ready";
+    int harnessSignals = 0;
+    ConsoleCancelEventHandler keepHarnessAlive = (_, e) =>
+    {
+        e.Cancel = true;
+        Interlocked.Increment(ref harnessSignals);
+    };
+    Console.CancelKeyPress += keepHarnessAlive;
+    try
+    {
+        var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+        start.ArgumentList.Add("ctrlc-wrapper");
+        start.ArgumentList.Add(wrapperRecord);
+        start.ArgumentList.Add(ready);
+        start.ArgumentList.Add(defaultChild ? "default" : "controlled");
+        using var wrapper = Process.Start(start) ?? throw new IOException("Wrapper did not start.");
+        var readyWait = Stopwatch.StartNew();
+        while (!File.Exists(ready) && readyWait.Elapsed < TimeSpan.FromSeconds(10)) Thread.Sleep(10);
+        if (!File.Exists(ready)) throw new IOException("Ctrl+C child did not become ready.");
+        Console.WriteLine("READY_FOR_EXTERNAL_CTRL_C");
+        if (!wrapper.WaitForExit(30000)) throw new TimeoutException("Wrapper did not finish after terminal input.");
+        using var report = JsonDocument.Parse(File.ReadAllText(wrapperRecord));
+        var root = report.RootElement;
+        int childCode = root.GetProperty("ChildExitCode").GetInt32();
+        string blast = root.GetProperty("BlastStatus").GetString()!;
+        int wrapperCode = wrapper.ExitCode;
+        bool childHandled = root.GetProperty("ChildHandled").GetBoolean();
+        bool finalScanCompleted = root.GetProperty("FinalScanCompleted").GetBoolean();
+        int cancels = root.GetProperty("CancelRequests").GetInt32();
+        bool handlersReleased = root.GetProperty("HandlersAfterFirst").GetInt32() == 0 &&
+            root.GetProperty("HandlersAfterSecond").GetInt32() == 0;
+        bool secondRun = root.GetProperty("SecondBlastStatus").GetString() == "ok" &&
+            root.GetProperty("SecondChildExitCode").GetInt32() == 0;
+        bool expectedChild = defaultChild ? childCode != 0 && !childHandled : childCode == 130 && childHandled;
+        int testExit = blast == "ok" && expectedChild && wrapperCode == childCode &&
+            finalScanCompleted && root.GetProperty("SessionStatus").GetString() == "complete" &&
+            cancels >= 1 && handlersReleased && secondRun && harnessSignals >= 1 ? 0 : 1;
+        string observed = $"CHILD_EXIT={childCode} WRAPPER_PROCESS_EXIT={wrapperCode} " +
+            $"TEST_EXECUTOR_EXIT={testExit} BLAST_STATUS={blast} CANCEL_REQUESTS={cancels} " +
+            $"CHILD_MODE={(defaultChild ? "default" : "controlled")} CHILD_HANDLED={childHandled} " +
+            $"FINAL_SCAN_COMPLETED={finalScanCompleted} " +
+            $"HANDLERS_RELEASED={handlersReleased} SECOND_RUN_OK={secondRun} " +
+            $"HARNESS_SIGNALS={harnessSignals}";
+        Console.WriteLine(observed);
+        File.WriteAllText(resultPath, "READY_FOR_EXTERNAL_CTRL_C\n" + observed + "\n");
+        return testExit;
+    }
+    finally
+    {
+        Console.CancelKeyPress -= keepHarnessAlive;
+        if (File.Exists(ready)) File.Delete(ready);
+    }
+}
+
+static int CtrlCTerminalSupervisor(string[] args)
+{
+    if (Console.IsInputRedirected || Console.IsOutputRedirected)
+    {
+        Console.WriteLine("BLOCKED: interactive console is not attached.");
+        return 3;
+    }
+    string resultPath = Path.GetFullPath(args[1]);
+    int signals = 0;
+    ConsoleCancelEventHandler keepSupervisorAlive = (_, e) =>
+    {
+        e.Cancel = true;
+        Interlocked.Increment(ref signals);
+    };
+    Console.CancelKeyPress += keepSupervisorAlive;
+    try
+    {
+        var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+        start.ArgumentList.Add("ctrlc-terminal-harness");
+        start.ArgumentList.Add(resultPath);
+        if (args.Length > 2) start.ArgumentList.Add(args[2]);
+        using var harness = Process.Start(start) ?? throw new IOException("Terminal harness did not start.");
+        string ready = resultPath + ".ready";
+        Check(SpinWait.SpinUntil(() => File.Exists(ready), TimeSpan.FromSeconds(10)),
+            "Terminal harness did not reach its child-ready sync point.");
+        Console.WriteLine("SUPERVISOR_READY_FOR_EXTERNAL_CTRL_C");
+        Check(harness.WaitForExit(30000), "Terminal harness did not exit.");
+        int harnessExit = harness.ExitCode;
+        bool testPassed = File.Exists(resultPath) &&
+            File.ReadAllText(resultPath).Contains("TEST_EXECUTOR_EXIT=0") &&
+            harnessExit == 0 && signals >= 1;
+        string line = $"HARNESS_PROCESS_EXIT={harnessExit} SUPERVISOR_RESULT={(testPassed ? "pass" : "fail")} " +
+            $"SUPERVISOR_SIGNALS={signals}";
+        Console.WriteLine(line);
+        File.AppendAllText(resultPath, line + "\n");
+        return testPassed ? 0 : 1;
+    }
+    finally { Console.CancelKeyPress -= keepSupervisorAlive; }
 }
 
 static int Probe()
@@ -337,7 +487,7 @@ static int All(string? filter = null)
         ,("crash after plan commit keeps fixed plan", CrashAfterPlanCommit)
         ,("crash after verification is audited", CrashAfterVerification)
         ,("binary file restore", BinaryRestore)
-        ,("exe wrapper preserves arguments stdin stdout exit", ExeWrapper)
+        ,("exe wrapper preserves arguments stdin stdout and nonzero exit", ExeWrapper)
         ,("cmd wrapper preserves space arguments and exit", CmdWrapper)
         ,("cmd quote argument is rejected before launch", CmdQuoteRejected)
         ,("abnormal child exit remains reportable", AbnormalChildExit)
@@ -380,6 +530,14 @@ static int All(string? filter = null)
         ,("cross-parent rename is unsupported", CrossParentRenameRejected)
         ,("cmd metacharacters reject before launch", CmdMetacharactersRejected)
         ,("cmd raw arguments reject before launch", CmdRawArgumentsRejected)
+        ,("cancel during baseline prevents child launch", CancelDuringBaseline)
+        ,("cancel during final scan remains incomplete", CancelDuringFinalScan)
+        ,("cancel after child exit with finalization failure preserves code", CancelThenFinalizationFailure)
+        ,("unresponsive child cancellation is bounded", UnresponsiveChildCancellation)
+        ,("terminated wrapper leaves interrupted session", TerminatedWrapperAudit)
+        ,("failed final commit cannot report complete", FailedFinalCommit)
+        ,("persistent final save failure audits interrupted", PersistentFinalSaveFailure)
+        ,("Blast failure process exit overrides known child code", BlastFailureProcessExit)
         ,("missing object key preserves existing store", MissingObjectKey)
         ,("report separates supported kind from object integrity and apply state", ReportEligibility)
     };
@@ -1261,10 +1419,17 @@ static void ExeWrapper()
     string error = process.StandardError.ReadToEnd();
     Check(process.WaitForExit(10000), "Wrapper hung on inherited stdin.");
     Check(process.ExitCode == 17 && output.Contains("CHILD_OUTPUT:space value|quoted \"value\"|from stdin") &&
-          output.Contains("WRAPPER_STATUS:ok:17") &&
+          output.Contains("WRAPPER_STATUS:ok:17:redirected_input_no_keyboard_control") &&
           File.ReadAllText(Path.Combine(fixture.Root, "stdio-result.txt")) ==
             "space value|quoted \"value\"|from stdin",
         "Executable wrapper lost argv, stdio, or child exit: " + error + output);
+    var state = new StateStore(fixture.StateDirectory);
+    var persisted = state.LoadSession(state.SessionIdsForTest().Single());
+    Check(persisted.ChildExitCode == 17 && persisted.FinalScanCompletedUtc is not null &&
+          persisted.ConsoleControlMode == "redirected_input_no_keyboard_control" &&
+          persisted.Status == "complete",
+        "Redirected wrapper lost final-scan or child-exit evidence.");
+    Console.WriteLine("EXIT_TRIPLE child=17 wrapper_process=17 test_executor=pass; console=redirected_input_no_keyboard_control");
 }
 
 static void CmdWrapper()
@@ -1325,6 +1490,208 @@ static void CmdRawArgumentsRejected()
     Throws<NotSupportedException>(() => engine.Run(command));
     Check(!File.Exists(Path.Combine(fixture.Root, "ran.signal")),
         "Raw cmd argument bypassed the checked ArgumentList path.");
+}
+
+static void CancelDuringBaseline()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    using var cancellation = new CancellationTokenSource();
+    var engine = new SessionEngine(fixture);
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage == "before_baseline") cancellation.Cancel();
+    };
+    var run = engine.Run(Child(fixture, "mark"), cancellation.Token);
+    var saved = engine.Report(run.SessionId);
+    Check(run.ChildExitCode is null && run.BlastStatus == "interrupted" &&
+          run.WrapperExitCode == 70 && run.CancelRequests == 1 &&
+          saved.Status == "interrupted" && saved.Coverage != "complete" &&
+          !File.Exists(Path.Combine(fixture.StateDirectory, "child-started.signal")),
+        "Baseline cancellation launched a child or left a ready session.");
+}
+
+static void CancelDuringFinalScan()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    using var cancellation = new CancellationTokenSource();
+    var engine = new SessionEngine(fixture);
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage == "before_final_scan") cancellation.Cancel();
+    };
+    var run = engine.Run(Child(fixture, "modify"), cancellation.Token);
+    var saved = engine.Report(run.SessionId);
+    Check(run.ChildExitCode == 0 && run.BlastStatus == "interrupted" &&
+          run.WrapperExitCode == 70 && run.CancelRequests == 1 &&
+          saved.ChildExitCode == 0 && saved.Status == "interrupted" &&
+          saved.Coverage != "complete" &&
+          File.ReadAllText(Path.Combine(fixture.Root, "alpha.txt")) == "after",
+        "Final-scan cancellation was reported as complete or lost the child exit code.");
+}
+
+static void CancelThenFinalizationFailure()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    using var cancellation = new CancellationTokenSource();
+    var engine = new SessionEngine(fixture);
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage == "child_started") cancellation.Cancel();
+        if (stage == "before_final_scan") throw new IOException("Synthetic final-scan failure after cancellation.");
+    };
+    var run = engine.Run(Child(fixture, "modify"), cancellation.Token);
+    var saved = engine.Report(run.SessionId);
+    Check(run.BlastStatus == "final_scan_failed" && run.ChildExitCode == 0 &&
+          run.WrapperExitCode == 70 && run.CancelRequests == 1 &&
+          saved.Status == "incomplete" && saved.Coverage == "incomplete" &&
+          saved.ChildExitCode == 0 && saved.CoverageDetail.ScanFailure!.Contains("Synthetic final-scan failure"),
+        "Failed finalization after cancellation was reported as success or lost the child exit code.");
+}
+
+static void UnresponsiveChildCancellation()
+{
+    using var fixture = SyntheticFixture.Create();
+    using var cancellation = new CancellationTokenSource();
+    var engine = new SessionEngine(fixture);
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage == "child_started") { cancellation.Cancel(); cancellation.Cancel(); }
+    };
+    var elapsed = Stopwatch.StartNew();
+    try
+    {
+        var run = engine.Run(Child(fixture, "hang"), cancellation.Token);
+        elapsed.Stop();
+        var saved = engine.Report(run.SessionId);
+        Check(run.BlastStatus == "interrupted" && run.WrapperExitCode == 70 &&
+              run.ChildExitCode is null && run.ChildProcessId is not null &&
+              run.CancelRequests == 1 && elapsed.Elapsed < TimeSpan.FromSeconds(10) &&
+              saved.Status == "interrupted" && saved.Coverage == "incomplete" &&
+              saved.InterruptionReason == "child_did_not_exit_within_5s_after_cancel" &&
+              saved.Final is null && saved.FinalScanCompletedUtc is null,
+            "Unresponsive direct child did not produce a bounded, diagnosable incomplete result.");
+    }
+    finally
+    {
+        string marker = Path.Combine(fixture.StateDirectory, "child-started.signal");
+        if (File.Exists(marker) && int.TryParse(File.ReadAllText(marker), out int ownedPid))
+        {
+            using var ownedChild = Process.GetProcessById(ownedPid);
+            if (!ownedChild.HasExited) { ownedChild.Kill(); ownedChild.WaitForExit(10000); }
+        }
+    }
+}
+
+static void TerminatedWrapperAudit()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+    start.ArgumentList.Add("run-worker");
+    start.ArgumentList.Add(fixture.DirectoryPath);
+    start.ArgumentList.Add(fixture.WorkerToken);
+    using var wrapper = Process.Start(start) ?? throw new IOException("Run worker did not start.");
+    try
+    {
+        string marker = Path.Combine(fixture.StateDirectory, "wrapper-running.signal");
+        Check(SpinWait.SpinUntil(() => File.Exists(marker), TimeSpan.FromSeconds(10)),
+            "Run worker did not reach the durable running state.");
+        string childMarker = Path.Combine(fixture.StateDirectory, "child-started.signal");
+        Check(SpinWait.SpinUntil(() => File.Exists(childMarker), TimeSpan.FromSeconds(10)),
+            "Synthetic direct child did not record its PID.");
+        wrapper.Kill();
+        Check(wrapper.WaitForExit(10000) && wrapper.ExitCode != 0,
+            "Synthetic wrapper termination did not occur.");
+        var state = new StateStore(fixture.StateDirectory);
+        using (state.AcquireLock()) state.AuditUnresolved();
+        var saved = state.LoadSession(state.SessionIdsForTest().Single());
+        Check(saved.Status == "interrupted" && saved.Coverage == "incomplete" &&
+              saved.ChildExitCode is null && saved.ChildProcessId is not null &&
+              saved.InterruptionReason == "unfinished_on_restart_from_running" &&
+              saved.CoverageDetail.ScanFailure!.Contains("background writer may still be running"),
+            "Killed wrapper was reported as a complete protected session.");
+    }
+    finally
+    {
+        if (!wrapper.HasExited) { wrapper.Kill(); wrapper.WaitForExit(10000); }
+        string childMarker = Path.Combine(fixture.StateDirectory, "child-started.signal");
+        if (File.Exists(childMarker) && int.TryParse(File.ReadAllText(childMarker), out int ownedPid))
+        {
+            using var ownedChild = Process.GetProcessById(ownedPid);
+            if (!ownedChild.HasExited) { ownedChild.Kill(); ownedChild.WaitForExit(10000); }
+        }
+    }
+}
+
+static void FailedFinalCommit()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    var engine = new SessionEngine(fixture);
+    int failures = 0;
+    StateStore.BeforeSessionSaveForTest = session =>
+    {
+        if (session.Status == "complete" && Interlocked.Increment(ref failures) == 1)
+            throw new IOException("Injected complete-session commit failure.");
+    };
+    try
+    {
+        var run = engine.Run(Child(fixture, "modify"));
+        var saved = engine.Report(run.SessionId);
+        Check(failures == 1 && run.BlastStatus == "final_scan_failed" &&
+              run.ChildExitCode == 0 && run.WrapperExitCode == 70 &&
+              saved.Status == "incomplete" && saved.Coverage == "incomplete" &&
+              saved.ChildExitCode == 0 &&
+              saved.CoverageDetail.ScanFailure!.Contains("commit failure"),
+            "Failed final commit was reported as successful completion.");
+    }
+    finally { StateStore.BeforeSessionSaveForTest = null; }
+}
+
+static void PersistentFinalSaveFailure()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    var engine = new SessionEngine(fixture);
+    StateStore.BeforeSessionSaveForTest = session =>
+    {
+        if (session.Status is "complete" or "incomplete")
+            throw new IOException("Injected persistent final persistence failure.");
+    };
+    try { Throws<IOException>(() => engine.Run(Child(fixture, "modify"))); }
+    finally { StateStore.BeforeSessionSaveForTest = null; }
+    using (engine.State.AcquireLock()) engine.State.AuditUnresolved();
+    var saved = engine.State.LoadSession(engine.State.SessionIdsForTest().Single());
+    Check(saved.Status == "interrupted" && saved.Coverage == "incomplete" &&
+          saved.ChildExitCode == 0 && saved.InterruptionReason == "unfinished_on_restart_from_finalizing",
+        "Persistent final-save failure left a falsely complete session or lost child exit evidence.");
+}
+
+static void BlastFailureProcessExit()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "before");
+    var start = new ProcessStartInfo(Environment.ProcessPath!)
+    {
+        UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true
+    };
+    start.ArgumentList.Add("failure-wrapper");
+    start.ArgumentList.Add(fixture.DirectoryPath);
+    start.ArgumentList.Add(fixture.WorkerToken);
+    using var wrapper = Process.Start(start) ?? throw new IOException("Failure wrapper did not start.");
+    string output = wrapper.StandardOutput.ReadToEnd();
+    string error = wrapper.StandardError.ReadToEnd();
+    Check(wrapper.WaitForExit(10000), "Failure wrapper did not exit.");
+    var state = new StateStore(fixture.StateDirectory);
+    var saved = state.LoadSession(state.SessionIdsForTest().Single());
+    Check(output.Contains("FAILURE_WRAPPER child=23 blast=final_scan_failed") &&
+          wrapper.ExitCode == 70 && saved.ChildExitCode == 23 &&
+          saved.Status == "incomplete" && saved.FinalScanCompletedUtc is null,
+        "Blast failure did not override wrapper exit while preserving child code: " + error + output);
+    Console.WriteLine("EXIT_TRIPLE child=23 wrapper_process=70 test_executor=pass; blast=final_scan_failed");
 }
 
 static void AbnormalChildExit()

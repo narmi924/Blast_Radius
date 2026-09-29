@@ -1,0 +1,6 @@
+FAIL cancel during final scan remains incomplete: System.OperationCanceledException: Synthetic final-scan cancellation.
+   at Program.<>c.<<Main>$>b__0_168(String stage) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1356
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+   at Blast.SessionEngine.Run(ProcessStartInfo command) in E:\Projects\Kaspi\Blast_Radius\src\Blast\SessionEngine.cs:line 111
+   at Program.<<Main>$>g__CancelDuringFinalScan|0_74() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1358
+   at Program.<<Main>$>g__All|0_12(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 398

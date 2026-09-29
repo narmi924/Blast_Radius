@@ -1,0 +1,6 @@
+FAIL cancel during baseline prevents child launch: System.OperationCanceledException: Synthetic baseline cancellation.
+   at Program.<>c.<<Main>$>b__0_167(String stage) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1339
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+   at Blast.SessionEngine.Run(ProcessStartInfo command) in E:\Projects\Kaspi\Blast_Radius\src\Blast\SessionEngine.cs:line 40
+   at Program.<<Main>$>g__CancelDuringBaseline|0_73() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1341
+   at Program.<<Main>$>g__All|0_12(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 398
