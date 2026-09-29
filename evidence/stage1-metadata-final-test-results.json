@@ -342,7 +342,7 @@
   {
     "status": "BLOCKED",
     "test": "R1 capture rejects leaf symlink swap",
-    "raw": "BLOCKED R1 capture rejects leaf symlink swap: Non-elevated symlink creation unavailable: IOException; HResult=0x80070522; message=客户端没有所需的特权。 : 'E:\\BlastRadiusFixture-74f45aaa00a640d9891f3e4fd913584d\\work\\alpha.txt'."
+    "raw": "BLOCKED R1 capture rejects leaf symlink swap: Non-elevated symlink creation unavailable: IOException; HResult=0x80070522; message=客户端没有所需的特权。 : 'E:\\BlastRadiusFixture-79ae07b9166f42d4bc6f8c09c02aaf85\\work\\alpha.txt'."
   },
   {
     "status": "PASS",

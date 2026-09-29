@@ -11,11 +11,13 @@ internal static class FileMetadata
 {
     internal static Action? BeforeSecurityReadForTest { get; set; }
     internal const string Version = "owner-dacl-attributes-v1";
-    private const FileAttributes Allowed = FileAttributes.Archive | FileAttributes.Normal | FileAttributes.Hidden;
+    private const FileAttributes AllowedFlags = FileAttributes.Archive | FileAttributes.Hidden;
 
     internal static void CheckAttributes(FileAttributes value)
     {
-        if ((value & ~Allowed) != 0)
+        if (value != FileAttributes.Normal &&
+            (value == 0 || (value & FileAttributes.Normal) != 0 ||
+             (value & ~AllowedFlags) != 0))
             throw new NotSupportedException("Unsupported file attribute combination: " + value);
     }
 

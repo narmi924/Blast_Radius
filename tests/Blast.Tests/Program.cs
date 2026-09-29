@@ -2864,6 +2864,9 @@ static void SecurityReadFailureIsUnknown()
 
 static void UnsupportedAttributeBlocksBaseline()
 {
+    Throws<NotSupportedException>(() =>
+        FileMetadata.CheckAttributes(FileAttributes.Normal | FileAttributes.Hidden));
+    Throws<NotSupportedException>(() => FileMetadata.CheckAttributes(0));
     using var fixture = SyntheticFixture.Create();
     string target = Path.Combine(fixture.Root, "alpha.txt");
     File.WriteAllText(target, "before");

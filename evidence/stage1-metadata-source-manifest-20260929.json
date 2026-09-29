@@ -11,8 +11,8 @@
   },
   {
     "path": "src/Blast/FileMetadata.cs",
-    "sha256": "ff4f9c66d9d7d9b54111b0a623459e619a2bbba6256f54ad834867d96bb14f8e",
-    "bytes": 3580
+    "sha256": "77396b391d708a39f30382463c24aebfb7e9ce918032232748aeee2b0cb68df8",
+    "bytes": 3681
   },
   {
     "path": "src/Blast/FileSystemScope.cs",
@@ -81,7 +81,7 @@
   },
   {
     "path": "tests/Blast.Tests/Program.cs",
-    "sha256": "a965f6592e8cc559b36beaa841df9edf5f5fe757b4d7970529a5dff8619afcf9",
-    "bytes": 149540
+    "sha256": "cd7a80a3fed40d1727e340407254ab00ac281fc07bd68bdedb3b3e0243001b9b",
+    "bytes": 149740
   }
 ]
