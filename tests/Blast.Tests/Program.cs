@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using Blast;
 using Microsoft.Data.Sqlite;
+using System.Security.AccessControl;
+using System.Security.Principal;
 
 if (args.Length > 0 && args[0] == "mutate") return Mutate(args);
 if (args.Length > 0 && args[0] == "mutate-nested") return MutateNested(args);
@@ -92,6 +94,7 @@ static int Mutate(string[] args)
             File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"),
                 Environment.ProcessId.ToString());
             Directory.SetCurrentDirectory(fixture.StateDirectory);
+            File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-relocated.signal"), "ready");
             Thread.Sleep(TimeSpan.FromSeconds(30));
             break;
         case "external-modify-add":
@@ -571,6 +574,15 @@ static int All(string? filter = null)
         ,("real SQLite double failure returns wrapper error", RealSqliteDoubleFailure)
         ,("missing object key preserves existing store", MissingObjectKey)
         ,("report separates supported kind from object integrity and apply state", ReportEligibility)
+        ,("separate file DACL survives modification and rename", SeparateDaclExistingOperations)
+        ,("deleted file protected inherited DACL refuses before content", DeletedFileSeparateDacl)
+        ,("DACL change after A rejects without neighbor mutation", DaclChangeAfterFinalRejects)
+        ,("security read failure is unknown before launch", SecurityReadFailureIsUnknown)
+        ,("unsupported attribute blocks baseline", UnsupportedAttributeBlocksBaseline)
+        ,("legacy state without security metadata rejects apply", LegacySecurityMetadataRejects)
+        ,("fixed plan rejects changed security target", FixedPlanRejectsSecurityTamper)
+        ,("state key database journal and encrypted object ACLs", StoragePermissions)
+        ,("broad state ACL is rejected without changing parent", BroadStateAclRejected)
     };
     int failures = 0, passed = 0, skipped = 0, blocked = 0;
     var selected = tests.Where(t => filter is null || t.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -1770,6 +1782,9 @@ static Process OwnedHangChild(SyntheticFixture fixture, int? expectedPid = null)
         int.TryParse(File.ReadAllText(marker), out _), TimeSpan.FromSeconds(10)),
         "Synthetic direct child did not publish its PID.");
     int pid = int.Parse(File.ReadAllText(marker));
+    Check(SpinWait.SpinUntil(() => File.Exists(Path.Combine(fixture.StateDirectory,
+        "child-relocated.signal")), TimeSpan.FromSeconds(10)),
+        "Synthetic child did not leave the protected root before the mutation test.");
     Check(expectedPid is null || expectedPid == pid, "Child PID differs from the observed Run result.");
     var process = Process.GetProcessById(pid);
     Check(!process.HasExited, "Synthetic direct child already exited before the barrier test.");
@@ -2748,6 +2763,212 @@ static void ReportEligibility()
               !change.TryGetProperty("recoverable", out _),
             "Report overstated current recoverability after object loss.");
     }
+}
+
+static void ProtectFileDacl(string path)
+{
+    var file = new FileInfo(path);
+    var security = file.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner);
+    security.SetAccessRuleProtection(isProtected: true, preserveInheritance: true);
+    security.AddAccessRule(new FileSystemAccessRule(
+        new SecurityIdentifier(WellKnownSidType.BuiltinGuestsSid, null),
+        FileSystemRights.ReadData, AccessControlType.Allow));
+    file.SetAccessControl(security);
+    Check(file.GetAccessControl(AccessControlSections.Access).AreAccessRulesProtected,
+        "Test fixture failed to create a separate file DACL.");
+}
+
+static FileSecurityState SecurityOf(string path)
+{
+    using var handle = WindowsFiles.OpenFile(path, write: false);
+    return FileMetadata.Read(handle);
+}
+
+static void SeparateDaclExistingOperations()
+{
+    foreach (string mutation in new[] { "modify", "rename" })
+    {
+        using var fixture = SyntheticFixture.Create();
+        string original = Path.Combine(fixture.Root, "alpha.txt");
+        File.WriteAllText(original, "before");
+        ProtectFileDacl(original);
+        var expected = SecurityOf(original);
+        var engine = new SessionEngine(fixture);
+        var run = engine.Run(Child(fixture, mutation));
+        var report = engine.Report(run.SessionId);
+        var kind = mutation == "modify" ? ChangeKind.Modified : ChangeKind.Renamed;
+        var plan = engine.Preview(run.SessionId, [OnlyChange(report, kind).Id]);
+        var result = engine.Apply(plan.Id, plan.Hash);
+        Check(result.Status == "verified" && result.OperationsApplied == 1 &&
+              File.ReadAllText(original) == "before" && SecurityOf(original) == expected,
+            "Modification or simple rename did not preserve the separate file DACL.");
+    }
+}
+
+static void DeletedFileSeparateDacl()
+{
+    using var fixture = SyntheticFixture.Create();
+    string file = Path.Combine(fixture.Root, "alpha.txt");
+    File.WriteAllText(file, "before");
+    ProtectFileDacl(file);
+    var engine = new SessionEngine(fixture);
+    var run = engine.Run(Child(fixture, "delete"));
+    var report = engine.Report(run.SessionId);
+    var plan = engine.Preview(run.SessionId, [OnlyChange(report, ChangeKind.Deleted).Id]);
+    var result = engine.Apply(plan.Id, plan.Hash);
+    Check(result.OperationsApplied == 0 && !File.Exists(file) &&
+          result.Operations.Single().Message!.Contains("Protected auto-inherited DACL"),
+        "Unsupported protected DACL was recreated or rejected after target mutation: " + result.Status);
+}
+
+static void DaclChangeAfterFinalRejects()
+{
+    var (fixture, engine, report) = Setup("before", "modify");
+    using (fixture)
+    {
+        string target = Path.Combine(fixture.Root, "alpha.txt");
+        string neighbor = Path.Combine(fixture.Root, "neighbor.txt");
+        File.WriteAllText(neighbor, "neighbor");
+        var neighborSecurity = SecurityOf(neighbor);
+        var parentSecurity = new DirectoryInfo(fixture.Root).GetAccessControl(
+            AccessControlSections.Access | AccessControlSections.Owner)
+            .GetSecurityDescriptorSddlForm(AccessControlSections.Access | AccessControlSections.Owner);
+        var plan = engine.Preview(report.Id, [OnlyChange(report, ChangeKind.Modified).Id]);
+        engine.BoundaryForTest = stage => { if (stage == "intent_durable") ProtectFileDacl(target); };
+        var result = engine.Apply(plan.Id, plan.Hash);
+        Check(result.OperationsApplied == 0 && File.ReadAllText(target) == "after" &&
+              SecurityOf(neighbor) == neighborSecurity &&
+              new DirectoryInfo(fixture.Root).GetAccessControl(
+                  AccessControlSections.Access | AccessControlSections.Owner)
+                  .GetSecurityDescriptorSddlForm(AccessControlSections.Access | AccessControlSections.Owner) == parentSecurity,
+            "DACL conflict changed target content or neighbor/parent permissions.");
+        Console.WriteLine("ACL_REJECT operations_applied=0 target=after neighbor_and_parent_acl=unchanged");
+    }
+}
+
+static void SecurityReadFailureIsUnknown()
+{
+    using var fixture = SyntheticFixture.Create();
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "fake-token-ACL-READ-20260929");
+    FileMetadata.BeforeSecurityReadForTest = () => throw new UnauthorizedAccessException("Synthetic READ_CONTROL denial.");
+    RunResult run;
+    try { run = new SessionEngine(fixture).Run(Child(fixture, "mark")); }
+    finally { FileMetadata.BeforeSecurityReadForTest = null; }
+    var saved = new StateStore(fixture.StateDirectory).LoadSession(run.SessionId);
+    Check(run.BlastStatus == "baseline_failed" && run.ChildProcessId is null &&
+          saved.Baseline["alpha.txt"].Presence == Presence.Unknown &&
+          !JsonSerializer.Serialize(saved).Contains("fake-token-ACL-READ-20260929") &&
+          !File.Exists(Path.Combine(fixture.StateDirectory, "child-started.signal")),
+        "Unreadable security metadata was accepted as a default DACL or an absent file.");
+}
+
+static void UnsupportedAttributeBlocksBaseline()
+{
+    using var fixture = SyntheticFixture.Create();
+    string target = Path.Combine(fixture.Root, "alpha.txt");
+    File.WriteAllText(target, "before");
+    File.SetAttributes(target, File.GetAttributes(target) | FileAttributes.ReadOnly);
+    var run = new SessionEngine(fixture).Run(Child(fixture, "mark"));
+    Check(run.BlastStatus == "baseline_failed" && run.ChildProcessId is null &&
+          !File.Exists(Path.Combine(fixture.StateDirectory, "child-started.signal")),
+        "Unsupported read-only attribute launched the child.");
+}
+
+static void LegacySecurityMetadataRejects()
+{
+    var (fixture, engine, report) = Setup("before", "modify");
+    using (fixture)
+    {
+        var persisted = engine.State.LoadSession(report.Id);
+        persisted.Baseline["alpha.txt"] = persisted.Baseline["alpha.txt"] with { Security = null };
+        persisted.Changes = persisted.Changes!.Select(change => change with
+            { Baseline = change.Baseline with { Security = null } }).ToList();
+        engine.State.SaveSession(persisted);
+        var plan = engine.Preview(report.Id, [OnlyChange(persisted, ChangeKind.Modified).Id]);
+        var result = engine.Apply(plan.Id, plan.Hash);
+        Check(result.OperationsApplied == 0 && result.Status == "no operations applied",
+            "Legacy plan without required metadata executed a restore.");
+        Check(File.ReadAllText(Path.Combine(fixture.Root, "alpha.txt")) == "after",
+            "Missing old-record security metadata changed the target.");
+    }
+}
+
+static void FixedPlanRejectsSecurityTamper()
+{
+    var (fixture, engine, report) = Setup("before", "modify");
+    using (fixture)
+    {
+        var plan = engine.Preview(report.Id, [OnlyChange(report, ChangeKind.Modified).Id]);
+        var session = engine.State.LoadSession(report.Id);
+        session.Changes = session.Changes!.Select(change => change with
+            { Baseline = change.Baseline with
+                { Security = change.Baseline.Security! with { OwnerSid = "S-1-5-18" } } }).ToList();
+        engine.State.SaveSession(session);
+        Throws<InvalidOperationException>(() => engine.Apply(plan.Id, plan.Hash));
+        Check(File.ReadAllText(Path.Combine(fixture.Root, "alpha.txt")) == "after",
+            "Changed security target bypassed the fixed restore payload.");
+    }
+}
+
+static void StoragePermissions()
+{
+    using var fixture = SyntheticFixture.Create();
+    StorageAccess.VerifyDirectory(fixture.StateDirectory);
+    var engine = new SessionEngine(fixture);
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), "fake-token-METADATA-20260929");
+    bool pendingObserved = false;
+    ObjectStore.PublicationBoundaryForTest = (stage, path) =>
+    {
+        if (stage == "encrypted_temp_created")
+        { StorageAccess.VerifyFile(path); pendingObserved = true; }
+    };
+    RunResult run;
+    try { run = engine.Run(Child(fixture, "modify")); }
+    finally { ObjectStore.PublicationBoundaryForTest = null; }
+    Check(run.BlastStatus == "ok" && pendingObserved, "Encrypted temporary object ACL was not observed.");
+    StorageAccess.VerifyDirectory(Path.Combine(fixture.StateDirectory, "objects"));
+    foreach (string file in Directory.GetFiles(fixture.StateDirectory)) StorageAccess.VerifyFile(file);
+    foreach (string file in Directory.GetFiles(Path.Combine(fixture.StateDirectory, "objects")))
+        StorageAccess.VerifyFile(file);
+    string database = engine.State.DatabasePathForTest;
+    using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+    {
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "UPDATE sessions SET status='metadata-journal-test' WHERE id=$id";
+        command.Parameters.AddWithValue("$id", run.SessionId);
+        command.ExecuteNonQuery();
+        string journal = database + "-journal";
+        Check(File.Exists(journal), "Test SQLite transaction did not create the expected journal.");
+        StorageAccess.VerifyFile(journal);
+        transaction.Rollback();
+    }
+    byte[] databaseBytes = File.ReadAllBytes(database);
+    Check(!Encoding.UTF8.GetString(databaseBytes).Contains("fake-token-METADATA-20260929") &&
+          !engine.ReportJson(run.SessionId).Contains("fake-token-METADATA-20260929"),
+        "New metadata or report exposed a synthetic token.");
+}
+
+static void BroadStateAclRejected()
+{
+    using var fixture = SyntheticFixture.Create();
+    string parent = fixture.DirectoryPath;
+    var beforeParent = new DirectoryInfo(parent).GetAccessControl(
+        AccessControlSections.Access | AccessControlSections.Owner)
+        .GetSecurityDescriptorSddlForm(AccessControlSections.Access | AccessControlSections.Owner);
+    var directory = new DirectoryInfo(fixture.StateDirectory);
+    var security = directory.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner);
+    security.AddAccessRule(new FileSystemAccessRule(
+        new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+        FileSystemRights.ReadAndExecute, AccessControlType.Allow));
+    directory.SetAccessControl(security);
+    Throws<UnauthorizedAccessException>(() => new StateStore(fixture.StateDirectory));
+    Check(new DirectoryInfo(parent).GetAccessControl(
+              AccessControlSections.Access | AccessControlSections.Owner)
+              .GetSecurityDescriptorSddlForm(AccessControlSections.Access | AccessControlSections.Owner) == beforeParent,
+        "State ACL validation changed the fixture parent ACL.");
 }
 
 static void Check(bool condition, string message)

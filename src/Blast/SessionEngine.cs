@@ -491,7 +491,8 @@ internal sealed class SessionEngine
             if (destinations.Count != 1) continue;
             var destination = destinations[0];
             bool simple = Path.GetDirectoryName(old.RelativePath) == Path.GetDirectoryName(destination.RelativePath) &&
-                old.ContentHash == destination.ContentHash;
+                old.ContentHash == destination.ContentHash && old.Security == destination.Security &&
+                old.Attributes == destination.Attributes;
             var kind = simple ? ChangeKind.Renamed : ChangeKind.Unsupported;
             result.Add(new(ChangeId(session.Id, kind, old.RelativePath, destination.RelativePath), kind,
                 old.RelativePath, destination.RelativePath, old, destination, "temporally_correlated",
@@ -514,7 +515,16 @@ internal sealed class SessionEngine
             }
             if (before.Presence == after.Presence &&
                 (before.Presence == Presence.Absent ||
-                 (before.ContentHash == after.ContentHash && before.FileId == after.FileId))) continue;
+                 (before.ContentHash == after.ContentHash && before.FileId == after.FileId &&
+                  before.Security == after.Security && before.Attributes == after.Attributes))) continue;
+            if (before.Presence == Presence.Present && after.Presence == Presence.Present &&
+                (before.Security != after.Security || before.Attributes != after.Attributes))
+            {
+                result.Add(new(ChangeId(session.Id, ChangeKind.Unsupported, path, null),
+                    ChangeKind.Unsupported, path, null, before, after, "temporally_correlated",
+                    "unsupported_to_apply: permissions or attributes changed during the session."));
+                continue;
+            }
             var kind = before.Presence == Presence.Absent ? ChangeKind.Added :
                 after.Presence == Presence.Absent ? ChangeKind.Deleted :
                 before.FileId != after.FileId && before.ContentHash == after.ContentHash
@@ -798,6 +808,12 @@ internal sealed class SessionEngine
         if (change.Kind == ChangeKind.Unsupported) throw new NotSupportedException(change.UnsupportedReason);
         VerifyObjectIfPresent(change.Baseline);
         VerifyObjectIfPresent(change.Final);
+        if (change.Kind == ChangeKind.Deleted)
+        {
+            FileMetadata.RequireCreatableSecurity(change.Baseline.Security!);
+            if (change.Baseline.Attributes is not (FileAttributes.Archive or FileAttributes.Normal))
+                throw new NotSupportedException("Deleted file attributes cannot be recreated before content.");
+        }
         string currentPath = change.Kind == ChangeKind.Renamed ? change.Destination! : change.Path;
         var current = Capture(session, currentPath).State;
         if (!PreMatches(current, change.Final)) throw new InvalidOperationException("Current file conflicts with A.");
@@ -815,6 +831,10 @@ internal sealed class SessionEngine
         if (file.Presence == Presence.Unknown) throw new InvalidOperationException("Unknown state cannot be restored.");
         if (file.Presence == Presence.Present)
         {
+            if (file.Security is null)
+                throw new InvalidDataException("Present state lacks versioned owner/DACL metadata.");
+            FileMetadata.RequireVersion(file.Security);
+            FileMetadata.CheckAttributes(file.Attributes);
             if (file.ObjectId is null) throw new InvalidDataException("Present state has no content object.");
             objects.Verify(file.ObjectId, file.Length);
         }
@@ -828,13 +848,15 @@ internal sealed class SessionEngine
         return current.Presence == Presence.Absent ||
             current.Volume == expected.Volume && current.FileId == expected.FileId &&
             current.Length == expected.Length && current.ContentHash == expected.ContentHash &&
-            current.Links == expected.Links && current.Attributes == expected.Attributes;
+            current.Links == expected.Links && current.Attributes == expected.Attributes &&
+            current.Security == expected.Security;
     }
 
     private static bool LogicalMatches(FileState actual, FileState expected) =>
         actual.Presence != Presence.Unknown && actual.Presence == expected.Presence &&
         (actual.Presence == Presence.Absent ||
-         actual.ContentHash == expected.ContentHash && actual.Length == expected.Length);
+         actual.ContentHash == expected.ContentHash && actual.Length == expected.Length &&
+         actual.Attributes == expected.Attributes && actual.Security == expected.Security);
 
     private static FileState Expected(ChangeRecord change) => change.Baseline;
 
@@ -900,9 +922,13 @@ internal sealed class SessionEngine
                     throw new InvalidOperationException("Deleted path became occupied.");
                 byte[] target = objects.Read(change.Baseline.ObjectId!);
                 parents.Check();
-                using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
-                    4096, FileOptions.WriteThrough);
+                if (change.Baseline.Attributes is not (FileAttributes.Archive or FileAttributes.Normal))
+                    throw new NotSupportedException("Deleted file attributes cannot be created before content safely.");
+                using var stream = FileMetadata.CreateWithSecurity(path, change.Baseline.Security!);
                 var created = WindowsFiles.ValidateSupportedLeaf(stream.SafeFileHandle, path);
+                if (FileMetadata.Read(stream) != change.Baseline.Security ||
+                    created.Attributes != change.Baseline.Attributes)
+                    throw new IOException("Created file metadata differs before content write.");
                 stream.Write(target);
                 stream.Flush(true);
                 BoundaryForTest?.Invoke("target_modified");
@@ -968,7 +994,8 @@ internal sealed class SessionEngine
         parents.Check();
         return new FileState(Presence.Present, relative, ObjectStore.Hash(bytes), null,
             bytes.Length, identity.Volume, identity.Index, identity.Links, identity.Attributes,
-            parents.ParentIdentity.Volume, parents.ParentIdentity.Index);
+            parents.ParentIdentity.Volume, parents.ParentIdentity.Index,
+            Security: FileMetadata.Read(stream));
     }
 
     private static void ValidateExecutableLeaf(Microsoft.Win32.SafeHandles.SafeFileHandle handle,
@@ -976,7 +1003,8 @@ internal sealed class SessionEngine
     {
         var identity = WindowsFiles.ValidateSupportedLeaf(handle, path);
         if (identity.Volume != expected.Volume || identity.Index != expected.FileId ||
-            identity.Links != expected.Links || identity.Attributes != expected.Attributes)
+            identity.Links != expected.Links || identity.Attributes != expected.Attributes ||
+            FileMetadata.Read(handle) != expected.Security)
             throw new InvalidOperationException("Final opened file identity or attributes differ from A.");
     }
 

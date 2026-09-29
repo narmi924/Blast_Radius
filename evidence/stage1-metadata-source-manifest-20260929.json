@@ -1,0 +1,87 @@
+[
+  {
+    "path": "src/Blast/AssemblyInfo.cs",
+    "sha256": "6b2095698917465104f0e8fe710eda0da0ab71138e91c48c54c781581d5c21fb",
+    "bytes": 86
+  },
+  {
+    "path": "src/Blast/Blast.csproj",
+    "sha256": "cbf3f612075c9f8b6fa55a58217115221c79051b390d806d905fcd71c990d6f0",
+    "bytes": 466
+  },
+  {
+    "path": "src/Blast/FileMetadata.cs",
+    "sha256": "ff4f9c66d9d7d9b54111b0a623459e619a2bbba6256f54ad834867d96bb14f8e",
+    "bytes": 3580
+  },
+  {
+    "path": "src/Blast/FileSystemScope.cs",
+    "sha256": "9cc017a84bfef1879dc0a2a023da786bdcbb4418950a6d0dd94469eedf283aeb",
+    "bytes": 12730
+  },
+  {
+    "path": "src/Blast/Models.cs",
+    "sha256": "ca1a05a0355f7063ea714cdf2492f25e13eb9d980e03e0c9546a3db4d7ddff06",
+    "bytes": 5271
+  },
+  {
+    "path": "src/Blast/ObjectStore.cs",
+    "sha256": "ed6c6b4974ab74bb954b44b92177cef11ab5739d5330c81c1994b2289404ea6a",
+    "bytes": 5876
+  },
+  {
+    "path": "src/Blast/packages.lock.json",
+    "sha256": "af52b6564aba16581920b6a78866eddffd2a87eb017311d3d12a0221404c4357",
+    "bytes": 2232
+  },
+  {
+    "path": "src/Blast/Program.cs",
+    "sha256": "41eca4d75ba542fd52d69383f972f3f5e3caf6f09b12070c2dcd7d188942251f",
+    "bytes": 1343
+  },
+  {
+    "path": "src/Blast/RunCancellation.cs",
+    "sha256": "f0c79c1daf6788a0ff355b507726b093330193c850176509f2cc42fb799429f9",
+    "bytes": 2278
+  },
+  {
+    "path": "src/Blast/SessionEngine.cs",
+    "sha256": "52bab3b577abbf2dcb59306efa92901d9df8f9b827b82f1e34ea5954fad4da00",
+    "bytes": 57743
+  },
+  {
+    "path": "src/Blast/StateStore.cs",
+    "sha256": "31d57544f7c990e2f78d18de3b95de123bf3629b3776dd79b78443f9620fc519",
+    "bytes": 16338
+  },
+  {
+    "path": "src/Blast/StorageAccess.cs",
+    "sha256": "cd5bd28afa0c47ead4e5639af3cf050830191da43f08bde4fa0adf78a0a6598f",
+    "bytes": 3344
+  },
+  {
+    "path": "src/Blast/SyntheticFixture.cs",
+    "sha256": "069222e16df6e5ecb022b4e1ab156ffa9d003f555de502a9da9ae4984b75427c",
+    "bytes": 4182
+  },
+  {
+    "path": "src/Blast/WindowsFiles.cs",
+    "sha256": "8e30d8a1b0c9892bb43cc106f2e0c71116ba25160024f259a327da163617ae43",
+    "bytes": 9468
+  },
+  {
+    "path": "tests/Blast.Tests/Blast.Tests.csproj",
+    "sha256": "7d4035de598fe3f98cbc53968b9c857108c1f925ed99248059a915f7743b699b",
+    "bytes": 359
+  },
+  {
+    "path": "tests/Blast.Tests/packages.lock.json",
+    "sha256": "2af3e5aa015bd2b4bc37728460053db627a3ebd7e8cb293218ba0164659dd335",
+    "bytes": 2382
+  },
+  {
+    "path": "tests/Blast.Tests/Program.cs",
+    "sha256": "a965f6592e8cc559b36beaa841df9edf5f5fe757b4d7970529a5dff8619afcf9",
+    "bytes": 149540
+  }
+]

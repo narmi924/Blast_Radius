@@ -121,7 +121,7 @@ internal static class FileSystemScope
             using var parents = new PathGuard(root, full);
             return CaptureWithGuard(relative, full, parents, objects);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidDataException or System.ComponentModel.Win32Exception or NotSupportedException)
         {
             return new(FileState.Unknown(relative, ex.GetType().Name + ": " + ex.Message,
                 ex is NotSupportedException ? CoverageFailure.UnsupportedType : CoverageFailure.ReadFailure), null);
@@ -150,25 +150,28 @@ internal static class FileSystemScope
             using var handle = WindowsFiles.OpenFile(full, write: false);
             FileIdentity identity = WindowsFiles.ValidateSupportedLeaf(handle, full);
             using var stream = new FileStream(handle, FileAccess.Read);
+            var security = FileMetadata.Read(stream);
             if (stream.Length > MaxFileBytes)
                 return new(FileState.Unknown(relative, "File exceeds the current size limit.", CoverageFailure.UnsupportedType), null);
             byte[] bytes = new byte[(int)stream.Length];
             stream.ReadExactly(bytes);
-            if (stream.Length != bytes.Length || WindowsFiles.ValidateSupportedLeaf(handle, full) != identity)
+            if (stream.Length != bytes.Length || WindowsFiles.ValidateSupportedLeaf(handle, full) != identity ||
+                FileMetadata.Read(stream) != security)
                 return new(FileState.Unknown(relative, "File identity or length changed during capture."), null);
             stream.Position = 0;
             byte[] secondRead = new byte[bytes.Length];
             stream.ReadExactly(secondRead);
-            if (!bytes.AsSpan().SequenceEqual(secondRead) || stream.Length != bytes.Length)
+            if (!bytes.AsSpan().SequenceEqual(secondRead) || stream.Length != bytes.Length ||
+                FileMetadata.Read(stream) != security)
                 return new(FileState.Unknown(relative, "File content changed during capture."), null);
             parents.Check();
             string hash = ObjectStore.Hash(bytes);
             string? objectId = objects?.Save(bytes);
             return new(new FileState(Presence.Present, relative, hash, objectId, bytes.Length,
                 identity.Volume, identity.Index, identity.Links, identity.Attributes,
-                parents.ParentIdentity.Volume, parents.ParentIdentity.Index), bytes);
+                parents.ParentIdentity.Volume, parents.ParentIdentity.Index, Security: security), bytes);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidDataException or System.ComponentModel.Win32Exception or NotSupportedException)
         {
             return new(FileState.Unknown(relative, ex.GetType().Name + ": " + ex.Message,
                 ex is NotSupportedException ? CoverageFailure.UnsupportedType : CoverageFailure.ReadFailure), null);

@@ -20,7 +20,7 @@ internal sealed class SyntheticFixture : IDisposable
         if (create)
         {
             Directory.CreateDirectory(Root);
-            Directory.CreateDirectory(StateDirectory);
+            StorageAccess.EnsurePrivateDirectory(StateDirectory);
             File.WriteAllText(Path.Combine(directory, "fixture.token"), token);
         }
         Scopes.Add(new ProtectionScope("workspace", Root, "workspace"));

@@ -17,7 +17,7 @@ internal sealed class StateStore
     internal StateStore(string directory)
     {
         this.directory = Path.GetFullPath(directory);
-        Directory.CreateDirectory(this.directory);
+        StorageAccess.EnsurePrivateDirectory(this.directory);
         database = Path.Combine(this.directory, "state.db");
         using var storeLock = AcquireLock();
         using var connection = Open();
@@ -38,8 +38,11 @@ internal sealed class StateStore
     {
         try
         {
-            return new FileStream(Path.Combine(directory, "state.lock"), FileMode.OpenOrCreate,
+            string path = Path.Combine(directory, "state.lock");
+            var stream = new FileStream(path, FileMode.OpenOrCreate,
                 FileAccess.ReadWrite, FileShare.None, 1, FileOptions.WriteThrough);
+            try { StorageAccess.VerifyFile(path); return stream; }
+            catch { stream.Dispose(); throw; }
         }
         catch (IOException exception)
         {
@@ -56,6 +59,7 @@ internal sealed class StateStore
             Pooling = false
         }.ToString());
         connection.Open();
+        StorageAccess.VerifyFile(database);
         Command(connection, "PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;")
             .ExecuteNonQuery();
         return connection;

@@ -56,6 +56,7 @@ internal static class WindowsFiles
             identity.Attributes.HasFlag(FileAttributes.SparseFile) ||
             identity.Attributes.HasFlag(FileAttributes.Offline) || identity.Links != 1)
             throw new NotSupportedException("Leaf is not a supported single-link ordinary file.");
+        FileMetadata.CheckAttributes(identity.Attributes);
         string actual = FinalPath(handle);
         string expected = @"\\?\" + Path.GetFullPath(expectedPath);
         if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))

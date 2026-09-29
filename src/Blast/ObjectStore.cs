@@ -12,11 +12,13 @@ internal sealed class ObjectStore
 
     internal ObjectStore(string stateDirectory, bool allowNewKey = true)
     {
+        StorageAccess.VerifyDirectory(stateDirectory);
         directory = Path.Combine(stateDirectory, "objects");
-        Directory.CreateDirectory(directory);
+        StorageAccess.EnsurePrivateDirectory(directory);
         string keyPath = Path.Combine(stateDirectory, "object-key.dpapi");
         if (File.Exists(keyPath))
         {
+            StorageAccess.VerifyFile(keyPath);
             key = ProtectedData.Unprotect(File.ReadAllBytes(keyPath), null, DataProtectionScope.CurrentUser);
         }
         else
@@ -29,6 +31,7 @@ internal sealed class ObjectStore
                 4096, FileOptions.WriteThrough);
             stream.Write(wrapped);
             stream.Flush(true);
+            StorageAccess.VerifyFile(keyPath);
         }
         if (key.Length != 32) throw new InvalidDataException("Invalid object key length.");
     }
@@ -42,6 +45,7 @@ internal sealed class ObjectStore
         string destination = Path.Combine(directory, id + ".bro");
         if (File.Exists(destination))
         {
+            StorageAccess.VerifyFile(destination);
             Verify(id, plaintext.Length);
             return id;
         }
@@ -57,6 +61,7 @@ internal sealed class ObjectStore
                 4096, FileOptions.WriteThrough))
             using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
             {
+                StorageAccess.VerifyFile(temporary);
                 PublicationBoundaryForTest?.Invoke("encrypted_temp_created", temporary);
                 writer.Write(Encoding.ASCII.GetBytes("BR01"));
                 writer.Write((long)plaintext.Length);
@@ -68,6 +73,7 @@ internal sealed class ObjectStore
             }
             PublicationBoundaryForTest?.Invoke("encrypted_temp_flushed", temporary);
             File.Move(temporary, destination, overwrite: false);
+            StorageAccess.VerifyFile(destination);
         }
         catch (IOException) when (File.Exists(destination))
         {
@@ -89,6 +95,7 @@ internal sealed class ObjectStore
         if (id.Length != 64 || id.Any(c => !Uri.IsHexDigit(c)))
             throw new InvalidDataException("Invalid object identifier.");
         string path = Path.Combine(directory, id + ".bro");
+        StorageAccess.VerifyFile(path);
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
         if (Encoding.ASCII.GetString(reader.ReadBytes(4)) != "BR01")

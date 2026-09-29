@@ -15,6 +15,6 @@ dotnet run --no-build --project tests/Blast.Tests -- all
 dotnet run --no-build --project tests/Blast.Tests -- demo
 ```
 
-The current local test record is 105 passed, 0 failed, and 1 blocked. The blocked test needs permission to create a symbolic link; the test runner returns a nonzero exit code when any test is blocked. Synthetic terminal tests also exercise Ctrl+C through the shared command path. The synthetic demo restores one modified file. See [acceptance evidence](evidence/acceptance-map.md) for individual results and remaining limits.
+The current local test record is 114 passed, 0 failed, and 1 blocked. The blocked test needs permission to create a symbolic link; the test runner returns a nonzero exit code when any test is blocked. Synthetic terminal tests also exercise Ctrl+C through the shared command path. The synthetic demo restores one modified file. Permission and attribute support is limited to the tested Stage 1 subset. See [acceptance evidence](evidence/acceptance-map.md) for individual results and remaining limits.
 
 No Claude hooks, watcher, cross-volume recovery, or real-directory trial are part of this stage.

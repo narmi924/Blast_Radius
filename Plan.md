@@ -1,6 +1,6 @@
 # Blast Radius 开发计划
 
-> 版本 0.8；核验日期：2026-09-29（Asia/Singapore）。0.2 已获批准，阶段 1 `In progress`；阶段 2–4 `Todo`。实现状态和实测证据在第 10 节更新，不以文档设计代替测试结果。
+> 版本 0.9；核验日期：2026-09-29（Asia/Singapore）。0.2 已获批准，阶段 1 `In progress`；阶段 2–4 `Todo`。实现状态和实测证据在第 10 节更新，不以文档设计代替测试结果。
 
 ## 1. 当前目标、场景与承诺
 
@@ -115,6 +115,10 @@ required 集合由**会话开始前固定的纳入规则减去明确排除规则
 
 ### B/A/C 恢复规则
 
+**阶段 1 最小权限与元数据边界（`owner-dacl-attributes-v1`）**：Present 的普通 NTFS 文件从已打开且完成身份/路径/数据流核验的句柄读取 owner SID、DACL 的 Access SDDL 与保护标志；仅接受非 null DACL 中普通 allow/deny ACE。读取失败为 Unknown，缺该版本字段的旧记录不能通过。严格比较所保存 SDDL 与保护标志，不声称任意 ACL 语义等价；DACL 读取与正文读取前后复核。`FileAttributes` 另行读取，只接受 Normal、Archive、Hidden 的组合；ReadOnly、System、Compressed、Encrypted、Sparse、Offline、Reparse 等均拒绝或标不支持。文件属性不是访问权限。SACL、所有者跨用户迁移、时间戳、EFS/压缩、完整 NTFS 元数据与其他用户实际访问测试均不在承诺中。[Microsoft 句柄级安全信息与 `READ_CONTROL`](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo)、[文件安全描述符与默认继承](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights)、[.NET 创建时指定安全描述符](https://learn.microsoft.com/en-us/dotnet/api/system.io.filesystemaclextensions.create?view=net-10.0)于本轮核对。
+
+修改和无覆盖简单改名要求 B/A 的 owner、DACL/保护状态和受支持属性完全一致，C 在最终执行所持句柄上仍等于 A；完成时正文及这些元数据等于 B，记录本次新身份而不要求 B 历史 ID。新增文件撤销要求 Present 的 C 权限/属性仍等于 A，保存安全副本后删除该文件，完成时为 Absent。恢复删除要求 B 对象和版本化权限/属性完整、父目录身份未变、原路径确实 Absent，且 B owner 为当前用户；创建时将 B 的安全描述符交给 CreateNew，**写正文前**复核新句柄上的 owner/DACL/保护状态和属性，写后再次核验。删除恢复当前仅接受可精确创建的 Normal/Archive 属性；受保护又标自动继承的 DACL 等无法精确重建的组合在预检时拒绝，零项修改。B/A 权限或属性在会话中不同的变更标 `unsupported_to_apply`；A 后漂移报告冲突。SACL/时间戳等未读取字段不写入目标承诺，不把内容一致冒充元数据已恢复。
+
 `B` 是目标检查点，`A` 是对应结束/观察边界，`C` 是 apply 时当前状态。**禁止用一个混合所有字段的通用 `Equals(B,A,C)`**。预览与 apply 使用相同规则，但 apply 必须重新取得句柄和检查前提：
 
 状态先判 `Present`、`Absent`、`Unknown`：明确扫描确认不存在才是 Absent；读取失败、权限不足、目录扫描不完整都为 Unknown，不能用作不存在前提。零字节普通文件是 Present，仍须有完整内容对象。撤销新增文件允许 `B=Absent`，无需 B 内容对象，但必须验证 Present 的 C 并保存加密安全副本。恢复已删除文件允许 `A/C=Absent`，须有 Present 的 B 内容对象，持久记录 C 的不存在及父路径前提，不为 Absent 的 C 创建空文件安全副本。任何 Unknown 拒绝 apply；Present 所需对象缺失/损坏也拒绝。下文“缺 B 拒绝”仅指**缺失目标状态记录**，不指合法的 `B=Absent`；“缺对象拒绝”只针对应为 Present 的状态。
@@ -160,6 +164,8 @@ required 集合由**会话开始前固定的纳入规则减去明确排除规则
 
 ## 8. 隐私与威胁模型
 
+**合成夹具状态库访问控制实测策略**：只在自动生成的 state 与 objects 目录上创建受保护 DACL，允许当前 SID、SYSTEM、Administrators；不改工作区、父目录或真实用户目录的 ACL。创建后核对目录 owner、保护标志和允许访问的 SID；SQLite 数据库/实际 journal、锁文件、DPAPI 包装密钥、已发布及临时密文对象均继承受控目录的 ACL，并在实际出现时核对 owner 与允许 SID。检查失败即拒绝操作，不凭“目录名叫 state”认为私有。此验证是安全描述符检查，**不是**另一个真实用户被拒绝访问的实测；管理员及同用户 Agent 仍可接触或篡改。SQLite/报告只含路径、摘要与所读 owner/DACL/属性，不含文件正文；对象生成先在内存中加密，再写 `.pending-*` 密文并核对权限，发布为 `.bro`。恢复修改直接写已核对目标句柄；删除恢复直接以 B 权限创建目标，无额外明文暂存。失败或进程中断仍可能留下部分明文目标，按 intent 审计，不能声称不存在残留。
+
 主要覆盖正常开发环境中的误操作及意外文件修改。同用户权限下，Agent 可能删除/篡改 Blast 的对象库与日志；ACL、哈希、SQLite 日志或同用户 DPAPI 不能自动构成防篡改边界。哈希用于偶发损坏检测，不能证明攻击者未改记录。恢复不会撤销已发生的读取、网络发送或凭据泄露；DNS 观察也不能证明访问成功。
 
 默认排除 `.git`、`.env*`、常见密钥/凭据目录、浏览器配置、包管理器认证配置等，并在启动预览显示规则。`.npmrc`、`.gitconfig` 等真实配置可能含凭据；**路径排除不能证明其余文件不含秘密**。即使用户明确选择敏感路径，未通过适用的加密/泄漏测试前仍拒绝其内容备份，不悄悄降级启动。
@@ -196,20 +202,21 @@ JSON 的顶层需 `schema_version`、`session_id`、`child_exit_code`、`blast_s
 
 | 项目 | 实际结果 | 尚缺 |
 |---|---|---|
-| 本机与依赖 | Windows 11 build 26200 x64；E: 本地 NTFS；SDK 10.0.303，runtime 10.0.12；Git 2.45.1.windows.1；Microsoft.Data.Sqlite 10.0.12，ProtectedData 10.0.0。SDK 已由 `global.json` 指定；依赖锁文件已由 restore 生成。本轮固定源码摘要见 `evidence/stage1-unresolved-source-tree-sha256-20260929.txt`；连续构建为 0 警告、0 错误，`--no-build` 全量测试为 Passed=105、Failed=0、Skipped=0、Blocked=1，执行器因 Blocked 返回 1。原始输出见 `evidence/stage1-unresolved-final-build-20260929.txt` 与 `evidence/stage1-unresolved-final-tests-20260929.txt`。 | 非提权符号链接夹具未建立，IOException HResult `0x80070522`；未做安装包、其他机器或其他卷验证。 |
+| 本机与依赖 | Windows 11 build 26200 x64；E: 本地 NTFS；SDK 10.0.303，runtime 10.0.12；Git 2.45.1.windows.1；Microsoft.Data.Sqlite 10.0.12，ProtectedData 10.0.0。SDK 已由 `global.json` 指定；依赖锁文件已由 restore 生成。本轮源码摘要见 `evidence/stage1-metadata-source-tree-sha256-20260929.txt`；连续构建为 0 警告、0 错误，`--no-build` 全量测试为 Passed=114、Failed=0、Skipped=0、Blocked=1，执行器因 Blocked 返回 1。原始输出见 `evidence/stage1-metadata-final-build-20260929.txt` 与 `evidence/stage1-metadata-final-tests-20260929.txt`，逐项结果见 `evidence/stage1-metadata-final-test-results.json`。 | 非提权符号链接夹具未建立，IOException HResult `0x80070522`；未做安装包、其他机器或其他卷验证。 |
 | NTFS 原语 | `dotnet run --project tests/Blast.Tests -- probe`：只读属性目录句柄允许父目录移动；包含 DELETE 权限且不共享删除的句柄阻止本机测试移动；句柄级改名和删除在临时 E: NTFS 文件通过。 | 这不是跨所有并发时序/重解析路径的形式证明；普通用户受保护目录可能取不到 DELETE 句柄，必须拒绝。 |
 | 合成链路 | 内部测试入口覆盖基线→子进程→结束扫描→报告→显式选择/固定计划→安全副本/intent→修改、新增、删除、简单重命名→验证；另测二进制和既有嵌套目录。required 读取失败、不支持项、基线对象损坏均阻止子进程启动；结束扫描读取失败为 Unknown；`.gitignore` 不决定备份范围。显式同卷外部文件/目录分别有恢复测试，单文件邻居未纳入；scope ID 与相对路径分开。组选择不全拒绝、整组预检冲突零执行、执行中失败报告已验证项数。每项测试名与结果见 `evidence/acceptance-map.md`。 | 内部测试可逐项调用尚在验证的恢复实现；阶段 1 验收仍须对应测试全部通过。`.cmd` 中含引号参数目前启动前拒绝；长路径/别名/ACL 与真实终端关闭未验证。系统崩溃/断电未测。 |
 | 互斥与诊断 | 独占状态文件句柄使并行 apply 返回 busy；持锁进程终止后可重获锁。实测恢复执行器在修改、改名及验证之间保留父目录保护，对普通修改保留目标活句柄；父目录移动及目标替换竞态测试通过。审计未决 intent 或丢失安全副本后，后续新计划 apply 和新 run 保守阻断。对象发布、计划记录、安全副本、intent、目标修改、验证后的进程终止均有测试。 | 对象发布目录元数据与 SQLite/对象/目标跨资源断电耐久未证明；未决库目前全库阻断，尚无核验后解除阻断的工作流。 |
-| 真实数据门槛 | 普通 `run`/`undo`/`report` 继续拒绝任意用户目录；`doctor` 报告 `disabled_pending_real_data_gate`。内部 `demo` 可重复输出一项修改恢复和 `operations_applied=1`。 | 合成对象虽采用 AES-GCM 和当前用户 DPAPI 包装密钥，真实目录的权限、ACL/元数据、完整暂存/故障清理与隐私审查未完成；不得开放普通 CLI。同用户 Agent 不受 DPAPI 隔离。 |
+| 真实数据门槛 | 普通 `run`/`undo`/`report` 继续拒绝任意用户目录；`doctor` 报告 `disabled_pending_real_data_gate`。内部 `demo` 本轮再次验证一项修改恢复和 `operations_applied=1`，见 `evidence/stage1-metadata-final-demo-20260929.txt`。 | 合成对象虽采用 AES-GCM 和当前用户 DPAPI 包装密钥，权限与属性的当前保守子集已测试，但更广的权限/属性、路径及隐私矩阵、故障残留和真实数据使用门槛仍未完成；不得开放普通 CLI。同用户 Agent 不受 DPAPI 隔离。 |
 | R1–R6 静态审查后的实测与修复 | 先加入确定性合成回归，本机原始红灯见 `evidence/review-r1-r5-before-20260929.txt`；该文件有 8 项失败断言，不能归为审查方已复现。修复后，R1 句柄绑定的最终路径、属性、硬链接/重解析及 ADS 检查；R2 固定计划执行载荷与中断审计；R3 默认数据流限制；R4 根及既有父目录身份历史；R5 `CreateNew` 后保留目标句柄直到验证；R6 新密文对象发布四个边界的进程终止诊断，分别有通过测试。详见 `evidence/acceptance-map.md`。 | R1 符号链接交换夹具因本机非提权创建失败为 Blocked；进程终止不证明断电耐久；R6 已诊断孤立密文对象，自动清理与真实数据门槛仍未验收。 |
 | R4 最终执行与命令包装复查 | 在 `intent_durable` 重排根或中间祖先，保留直接父目录及 A 文件身份的两项回归：原执行器实际 `verified`、执行 1 项并写回 B；修复后均零项执行，明确目录身份冲突。普通嵌套修改恢复及新增/删除/简单重命名的根替换拒绝通过。三文件循环和跨父目录重命名拒绝通过；`.cmd` 原始 `Arguments` 绕过检查先失败再修复为启动前拒绝。证据见 `evidence/r4-red-*.txt`、`evidence/r4-green-*.txt`、`evidence/cmd-raw-red-20260929.txt`、本轮最终测试输出。 | 原始第一次夹具因自身保持独占文件句柄得到共享冲突，不计作漏洞复现；修正夹具后才得到上述红灯。`.cmd` 含引号参数继续拒绝。 |
 | 0.6 交互 Ctrl+C 旧实验 | 在本机 PTY 中运行合成包装器并发送 Ctrl+C；测试包装器自身安装处理器，子进程退出 130，见 `evidence/ctrlc-pty-20260929.txt`。 | 此旧实验不能证明共用路径；0.7 的新实验与结果见下一行。 |
 | 共用包装生命周期与三层退出结果 | `RunCancellation` 的处理器只通知，`SessionEngine.Run` 正常线程进行基线、5 秒有界等待、扫描和持久提交；`RunResult.WrapperExitCode` 成功透传 child 实际码，自身失败返回 70。重定向包装实测 child=17、wrapper=17、测试通过；收尾失败实测 child=23、wrapper=70、测试通过。真实 PTY 外部 Ctrl+C：子进程显式处理时 child/wrapper=130；默认子进程处理时本机 child/wrapper=`-1073741510`；监督进程读取外层测试进程的实际 ExitCode=0，见 `evidence/ctrlc-controlled-supervised-final-20260929.txt` 与 `evidence/ctrlc-default-supervised-final-20260929.txt`。基线取消、扫描取消、取消后扫描失败、无响应子进程、处理器释放和重复运行、包装器终止后审计、最终提交失败及持续持久化失败均有合成测试。逐项见 `evidence/acceptance-map.md`。 | 终端关闭本身未实测；已验证的是被测包装器进程终止后的重启审计。5 秒超时不自动管理进程树，直接子进程和后台写入可能继续。普通用户目录入口仍关闭；真实数据门槛未过。 |
 | 未决运行与真实 SQLite 双重写入失败 | 同库 S1 有效计划、S2 活子进程的确定性测试中，S2 取消返回、包装器终止后审计、`running` 保存失败三种情况均阻止新 run 启动和 S1 apply，目标仍为 A 且零执行。`launch_pending` 保存失败不会启动子进程；基线取消和完整完成不误阻断后续 run。测试专用 SQLite 触发器实际拒绝正常 `complete` 与错误 `incomplete` 两次更新；被测包装进程实测 child=23、wrapper ExitCode=70、外层测试通过，并报告 `diagnostic_persisted=false`；移除触发器后审计保留未完成状态及操作屏障。红/绿输出与测试映射见 `evidence/acceptance-map.md`。 | 屏障当前无自动核验解除路径；进程已死也不能只凭 PID 放行。真实断电、后台进程树和终端关闭不在这批证据内。 |
+| 最小权限与元数据边界 | `owner-dacl-attributes-v1` 从已核对的文件句柄捕获 owner SID、Access SDDL、DACL 保护标志和受支持的 `FileAttributes`；旧记录缺字段、读取失败、非普通 ACE 或属性拒绝/标 Unknown。固定计划绑定这些前提和目标；A 后 DACL 漂移零执行；单独文件 DACL 的修改/改名恢复保持原值；删除恢复对不能精确重建的受保护自动继承 DACL 在预检拒绝。状态目录、数据库、实际 journal、密钥、密文临时/已发布对象的安全描述符检查通过；假 token 未进入新元数据、数据库或报告。本轮合成成功与冲突演示及逐项测试映射见 `evidence/acceptance-map.md`。 | 未用第二个真实用户验证访问拒绝；SACL、跨用户 owner、完整 ACL 语义等价、所有 NTFS 属性/元数据和更多权限失败矩阵未支持。现有直接目标写入在故障时可留部分内容，由 intent 审计；真实数据门槛仍关闭。 |
 
 清理记录：一次早期 Git 夹具测试在修复只读 `.git` 对象清理逻辑前失败，留下自动生成的 `E:\BlastRadiusFixture-f7468797a55b4cbd8929971838decb5b`。后续夹具清理测试通过；对这一个遗留目录的递归删除命令被自动执行策略拒绝，未改动该目录，待在允许的清理环境中处理。它仅含测试合成数据，不计作受保护用户目录。
 
-测试全部用本轮自动创建的临时目录和假数据，不删除真实文件、不读凭据、不改真实自启动或全局包。测试工具内部可以逐项调用尚在验证的恢复实现；这不等于阶段 1 apply 验收完成，也不开放普通用户目录。阶段 1 余项 `Todo/Blocked`：`.cmd` 带引号参数准确传递（现明确拒绝）；真实终端关闭及后台写入/子进程树边界的进一步验证；缺失目录重建的进一步拒绝矩阵；更完整的长路径、路径别名、权限/ACL 与 Win32 失败后审计矩阵；持久对象目录元数据、真实数据加密/权限/明文暂存及隐私门槛；系统崩溃/断电独立验证。名称交换、三名称循环、覆盖式和跨父目录重命名已有明确拒绝测试。各项是否已测以 `evidence/acceptance-map.md` 和原始输出为准，不用新增测试数量替代验收完成度。阶段 1 **仍为 In progress**。
+测试全部用自动创建的临时目录和假数据，不删除真实文件、不读凭据、不改真实自启动或全局包。测试工具内部可以逐项调用尚在验证的恢复实现；这不等于阶段 1 apply 验收完成，也不开放普通用户目录。阶段 1 余项 `Todo/Blocked`：`.cmd` 带引号参数准确传递（现明确拒绝）；真实终端关闭及后台写入/子进程树边界的进一步验证；缺失目录重建的进一步拒绝矩阵；更完整的长路径、路径别名、权限/ACL 与 Win32 失败后审计矩阵；第二用户访问拒绝验证、真实数据完整隐私矩阵和故障残留控制；系统崩溃/断电独立验证。当前未使用额外明文目标暂存，不为了匹配文档虚构暂存文件；直接目标写入的部分完成仍由 intent 审计。名称交换、三名称循环、覆盖式和跨父目录重命名已有明确拒绝测试。各项是否已测以 `evidence/acceptance-map.md` 和原始输出为准，不用新增测试数量替代验收完成度。阶段 1 **仍为 In progress**。
 
 ## 11. 主要风险、待验证假设与阻碍
 
@@ -251,3 +258,4 @@ USN 整卷观察、ETW 进程/文件/网络事件、敏感读取审计、注册�
 | 0.6 | 2026-09-29 | R4 最终执行句柄链逐级绑定固定计划历史目录身份；补 `.cmd` 原始参数拒绝、三文件循环和跨父目录重命名拒绝，并实测带处理器的 PTY Ctrl+C。 | 修正夹具后的本机前后对照、最终构建与 90 Passed/0 Failed/1 Blocked 输出位于 `evidence/`；阶段 1 仍 In progress。 |
 | 0.7 | 2026-09-29 | 把取消处理与退出码决策放入共用 `SessionEngine.Run` 路径，保守处理基线/收尾取消、无响应与重启审计；实测生产路径的真实终端 Ctrl+C。 | 原始构建、98 Passed/0 Failed/1 Blocked 全量测试、两种真实终端退出结果与逐测试映射在 `evidence/`；阶段 1 仍 In progress。 |
 | 0.8 | 2026-09-29 | 对未确认退出的直接子进程建立同库阻断；启动前提交可审计状态；真实 SQLite 双重写入失败进入共用错误出口并区分观察与持久结果。 | 修正夹具后的本机红灯、最终构建和 105 Passed/0 Failed/1 Blocked 全量测试及逐项映射见 `evidence/`；阶段 1 仍 In progress。 |
+| 0.9 | 2026-09-29 | 阶段 1 增加最小 owner/DACL/属性版本规则，将捕获、固定计划、前提检查和执行后验证接入文件操作；自动生成状态库采用创建时受保护 DACL 并验证实际数据库、journal、密钥和密文对象。 | 同源码连续构建 0 警告/错误；全量 114 Passed/0 Failed/1 Blocked、成功恢复与 DACL 漂移拒绝合成演示、源码摘要及逐测试映射见 `evidence/stage1-metadata-*` 和 `evidence/acceptance-map.md`。阶段 1 仍 In progress。 |

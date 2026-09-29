@@ -1,0 +1,4 @@
+ACL_REJECT operations_applied=0 target=after neighbor_and_parent_acl=unchanged
+PASS DACL change after A rejects without neighbor mutation
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0
+REJECT_TEST_EXIT=0

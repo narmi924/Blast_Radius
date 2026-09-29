@@ -22,7 +22,8 @@ internal sealed record FileState(
     uint ParentVolume,
     ulong ParentId,
     string? Error = null,
-    CoverageFailure? FailureKind = null)
+    CoverageFailure? FailureKind = null,
+    FileSecurityState? Security = null)
 {
     internal static FileState Absent(string path, FileIdentity parent) =>
         new(Presence.Absent, path, null, null, 0, 0, 0, 0, 0, parent.Volume, parent.Index);
