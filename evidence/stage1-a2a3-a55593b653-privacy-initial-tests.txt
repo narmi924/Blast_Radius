@@ -1,0 +1,41 @@
+PASS fake token never enters persistent plaintext
+PASS new token safety copy stays encrypted
+FAIL baseline fake token process and outputs: System.IO.IOException: The process cannot access the file 'E:\BlastRadiusFixture-dadb15952ce740df8fe9516b5c2d42f3\state\state.db-journal' because it is being used by another process.
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.File.OpenHandle(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize)
+   at System.IO.File.ReadAllBytes(String path)
+   at Program.<>c__DisplayClass0_88.<<Main>$>b__305(String path) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3564
+   at Blast.StateStore.SavePlan(RestorePlan plan) in E:\Projects\Kaspi\Blast_Radius\src\Blast\StateStore.cs:line 146
+   at Blast.SessionEngine.Preview(String sessionId, IEnumerable`1 selectedIds) in E:\Projects\Kaspi\Blast_Radius\src\Blast\SessionEngine.cs:line 663
+   at Program.<>c__DisplayClass0_89.<<Main>$>b__307() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3608
+   at Program.<<Main>$>g__WatchProductionJournal|0_167(String token, Action body) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3569
+   at Program.<<Main>$>g__BaselineTokenArtifacts|0_168() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3606
+   at Program.<<Main>$>g__All|0_19(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 652
+FAIL session fake token safety process and outputs: System.IO.IOException: The process cannot access the file 'E:\BlastRadiusFixture-70e588cbff1c415bb96f6b55422eabb9\state\state.db-journal' because it is being used by another process.
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.File.OpenHandle(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize)
+   at System.IO.File.ReadAllBytes(String path)
+   at Program.<>c__DisplayClass0_88.<<Main>$>b__305(String path) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3564
+   at Blast.StateStore.SavePlan(RestorePlan plan) in E:\Projects\Kaspi\Blast_Radius\src\Blast\StateStore.cs:line 146
+   at Blast.SessionEngine.Preview(String sessionId, IEnumerable`1 selectedIds) in E:\Projects\Kaspi\Blast_Radius\src\Blast\SessionEngine.cs:line 663
+   at Program.<>c__DisplayClass0_90.<<Main>$>b__310() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3667
+   at Program.<<Main>$>g__WatchProductionJournal|0_167(String token, Action body) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3569
+   at Program.<<Main>$>g__SessionTokenArtifacts|0_169() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3665
+   at Program.<<Main>$>g__All|0_19(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 652
+FAIL excluded move fake token process and outputs: System.IO.IOException: The process cannot access the file 'E:\BlastRadiusFixture-8902c7ca8e3546c4ba4891cc5304b7e3\state\state.db-journal' because it is being used by another process.
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.File.OpenHandle(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize)
+   at System.IO.File.ReadAllBytes(String path)
+   at Program.<>c__DisplayClass0_88.<<Main>$>b__305(String path) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3564
+   at Blast.StateStore.SavePlan(RestorePlan plan) in E:\Projects\Kaspi\Blast_Radius\src\Blast\StateStore.cs:line 146
+   at Blast.SessionEngine.Preview(String sessionId, IEnumerable`1 selectedIds) in E:\Projects\Kaspi\Blast_Radius\src\Blast\SessionEngine.cs:line 663
+   at Program.<>c__DisplayClass0_91.<<Main>$>b__313() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3724
+   at Program.<<Main>$>g__WatchProductionJournal|0_167(String token, Action body) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3569
+   at Program.<<Main>$>g__ExcludedMoveTokenArtifacts|0_170() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 3722
+   at Program.<<Main>$>g__All|0_19(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 652
+TOKEN_TERMINATED worker_exit=-2146232797 pending_count=1 pending_bytes=83 stderr_token=false
+PASS terminated baseline object leaves encrypted pending token
+RESULT: Passed=3 Failed=3 Skipped=0 Blocked=0

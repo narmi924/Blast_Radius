@@ -1,0 +1,48 @@
+  Blast -> E:\Projects\Kaspi\Blast_Radius\src\Blast\bin\Debug\net10.0-windows\Blast.dll
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3522,13): error CS0128: 已在此范围定义了名为“AssertNoToken”的局部变量或函数 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3549,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3550,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3552,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3554,23): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3615,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3683,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3728,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3744,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3465,9): warning CS8604: “ChangeRecord Enumerable.Single<ChangeRecord>(IEnumerable<ChangeRecord> source, Func<ChangeRecord, bool> predicate)”中的形参“source”可能传入 null 引用实参。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3686,79): warning CS8602: 解引用可能出现空引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3549,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3550,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3552,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3554,9): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3615,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3683,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3728,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3744,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3522,13): warning CS8321: 声明了本地函数“AssertNoToken”，但从未使用过 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+
+生成失败。
+
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3465,9): warning CS8604: “ChangeRecord Enumerable.Single<ChangeRecord>(IEnumerable<ChangeRecord> source, Func<ChangeRecord, bool> predicate)”中的形参“source”可能传入 null 引用实参。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3686,79): warning CS8602: 解引用可能出现空引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3522,13): warning CS8321: 声明了本地函数“AssertNoToken”，但从未使用过 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3522,13): error CS0128: 已在此范围定义了名为“AssertNoToken”的局部变量或函数 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3549,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3550,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3552,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3554,23): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3615,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3683,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3728,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3744,19): error CS1503: 参数 1: 无法从“string”转换为“byte[]” [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3549,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3550,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3552,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3554,9): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3615,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3683,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3728,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3744,5): error CS8422: 静态本地函数不能包含对 "this" 或 "base" 的引用。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+    3 个警告
+    17 个错误
+
+已用时间 00:00:01.73

@@ -1,0 +1,181 @@
+PROBE PASS: read-only parent handle allowed rename; DELETE-access guard blocked it; handle rename/delete passed on local NTFS.
+PASS ntfs primitives
+PASS modified file full chain and idempotence
+PASS modified file conflict
+PASS equal content with changed identity conflicts
+PASS new file removal and safety copy
+PASS zero-byte new file is present
+PASS new file conflict
+PASS deleted file recovery
+PASS deleted path occupied
+PASS simple rename recovery
+PASS rename source occupied
+PASS missing baseline object
+PASS corrupt baseline object
+PASS corrupt safety object blocks mutation
+PASS name exchange is unsupported
+PASS missing parent is unknown
+PASS fake token never enters persistent plaintext
+PASS new token safety copy stays encrypted
+PASS move into excluded path stays outside coverage
+PASS Git index and prior dirt are preserved
+PASS partial failure is in doubt
+PASS cross-process state lock and termination
+worker: verified; verified=1
+PASS two processes apply same plan
+PASS crash after intent is audited
+PASS crash after safety copy is audited
+PASS crash after target mutation is audited
+PASS executor retains parent guard through verification
+PASS audited intent blocks a new plan
+PASS required read failure blocks child launch
+PASS unsupported required file blocks child launch
+PASS final read failure is unknown
+PASS explicit external file and directory restore
+PASS external file deletion restore
+PASS scope IDs separate identical relative paths
+PASS state inside protected scope is rejected
+PASS associated group requires complete selection
+PASS whole group preflight conflict executes zero
+PASS failure after first verified operation reports partial
+PASS crash after reused safety object before reference is audited
+PASS R6 new encrypted object before publish crash
+PASS R6 new encrypted object after publish crash
+PASS R6 new encrypted temporary file creation crash
+PASS R6 new encrypted object verification crash
+PASS crash after plan commit keeps fixed plan
+PASS crash after verification is audited
+PASS binary file restore
+EXIT_TRIPLE child=17 wrapper_process=17 test_executor=pass; console=redirected_input_no_keyboard_control
+PASS exe wrapper preserves arguments stdin stdout and nonzero exit
+PASS cmd wrapper preserves space arguments and exit
+PASS cmd quote argument is rejected before launch
+Process terminated.
+Synthetic child failure.
+   at System.Environment.FailFast(System.Runtime.CompilerServices.StackCrawlMarkHandle, System.String, System.Runtime.CompilerServices.ObjectHandleOnStack, System.String)
+   at System.Environment.FailFast(System.Threading.StackCrawlMark ByRef, System.String, System.Exception, System.String)
+   at System.Environment.FailFast(System.String)
+   at Program.<Main>$(System.String[])
+PASS abnormal child exit remains reportable
+PASS missing safety after restart blocks new apply
+PASS parent move at durable intent blocks mutation
+PASS target replacement during verification is blocked
+PASS corrupt baseline before ready blocks child
+PASS overwrite rename is not split into independent changes
+PASS coverage persists four separate buckets and rule version
+PASS ordinary CLI run remains closed
+PASS R1 hard link after intent rejects without alias write
+PASS R2 changed target object invalidates confirmed plan
+PASS R2 changed scope invalidates confirmed plan
+PASS R3 baseline ADS blocks child
+PASS R3 ADS added before apply blocks mutation
+PASS R4 recreated root rejects deleted file restore
+PASS R4 recreated nested parent rejects restore
+PASS R5 same-content replacement cannot be verified
+PASS R1 final attribute change rejects modification
+PASS R1 hard link blocks added-file removal
+PASS R1 hard link blocks rename restoration
+BLOCKED R1 capture rejects leaf symlink swap: Non-elevated symlink creation unavailable: IOException; HResult=0x80070522; message=客户端没有所需的特权。 : 'E:\BlastRadiusFixture-f33d60f801e94b819a116316b0592923\work\alpha.txt'.
+PASS R1 capture rejects hard-link leaf swap
+PASS R2 changed operation kind invalidates plan
+PASS R2 interrupted audit uses confirmed path
+PASS R3 ADS on added file blocks removal
+PASS R3 stream query failure is unknown
+PASS R4 recreated external directory is incomplete
+PASS R4 empty directory history is preserved
+PASS R4 newly added directory is unsupported
+PASS R4 new directory does not receive invented absent baseline
+PASS R4 root replacement before apply conflicts
+PASS R4 root reparent at durable intent rejects mutation
+PASS R4 intermediate reparent at durable intent rejects mutation
+PASS R4 ordinary nested file restores
+PASS R4 root reparent blocks added removal
+PASS R4 root reparent blocks deleted recreation
+PASS R4 root reparent blocks simple rename
+PASS three-name cycle is unsupported
+PASS cross-parent rename is unsupported
+PASS cmd metacharacters reject before launch
+PASS cmd raw arguments reject before launch
+PASS cancel during baseline prevents child launch
+PASS cancel during final scan remains incomplete
+PASS cancel after child exit with finalization failure preserves code
+PASS unresponsive child cancellation is bounded
+PASS terminated wrapper leaves interrupted session
+PASS failed final commit cannot report complete
+PASS persistent final save failure audits interrupted
+EXIT_TRIPLE child=23 wrapper_process=70 test_executor=pass; blast=final_scan_failed
+PASS Blast failure process exit overrides known child code
+BLOCK_EVIDENCE new_child_started=false apply_operations=0 target=after
+PASS unconfirmed direct child blocks later run and apply
+BLOCK_EVIDENCE new_child_started=false apply_operations=0 target=after
+PASS terminated wrapper child blocks later run and apply
+BLOCK_EVIDENCE new_child_started=false apply_operations=0 target=after
+PASS running save failure retains uncertain child barrier
+PASS prelaunch durable failure prevents child start
+PASS baseline cancellation permits later run
+PASS confirmed completion permits later run
+BLOCK_EVIDENCE new_child_started=false apply_operations=0 target=after
+EXIT_TRIPLE child=23 wrapper_process=70 test_executor=pass; diagnostic_persisted=false
+PASS real SQLite double failure returns wrapper error
+PASS missing object key preserves existing store
+PASS report separates supported kind from object integrity and apply state
+PASS separate file DACL survives modification and rename
+PASS deleted file protected inherited DACL refuses before content
+ACL_REJECT operations_applied=0 target=after neighbor_and_parent_acl=unchanged
+PASS DACL change after A rejects without neighbor mutation
+PASS security read failure is unknown before launch
+PASS unsupported attribute blocks baseline
+PASS legacy state without security metadata rejects apply
+PASS fixed plan rejects changed security target
+PASS state key database journal and encrypted object ACLs
+PASS broad state ACL is rejected without changing parent
+NORMAL_DELETE_RESULT status=no operations applied operations=0 plan=conflict exists=False length=null content=null attributes=null
+PASS Normal deleted file refuses before target creation
+ATTRIBUTE_MODIFY attributes=Normal status=no operations applied operations=0 content=after actual=Normal
+ATTRIBUTE_MODIFY attributes=Hidden status=no operations applied operations=0 content=after actual=Hidden
+ATTRIBUTE_MODIFY attributes=Archive status=verified operations=1 content=before actual=Archive
+ATTRIBUTE_MODIFY attributes=Hidden, Archive status=verified operations=1 content=before actual=Hidden, Archive
+PASS declared attributes modify or refuse before mutation
+ATTRIBUTE_RENAME_OBSERVED requested=Normal kind=Renamed baseline=Normal final=Normal destination=Normal
+ATTRIBUTE_RENAME_RESULT requested=Normal status=no operations applied operations=0 source=False/ destination=True/Normal
+ATTRIBUTE_REMOVAL attributes=Normal status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Hidden kind=Renamed baseline=Hidden final=Hidden destination=Hidden
+ATTRIBUTE_RENAME_RESULT requested=Hidden status=no operations applied operations=0 source=False/ destination=True/Hidden
+ATTRIBUTE_REMOVAL attributes=Hidden status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Archive kind=Renamed baseline=Archive final=Archive destination=Archive
+ATTRIBUTE_RENAME_RESULT requested=Archive status=verified operations=1 source=True/Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Archive status=verified operations=1
+ATTRIBUTE_RENAME_OBSERVED requested=Hidden, Archive kind=Renamed baseline=Hidden, Archive final=Hidden, Archive destination=Hidden, Archive
+ATTRIBUTE_RENAME_RESULT requested=Hidden, Archive status=verified operations=1 source=True/Hidden, Archive destination=False/
+ATTRIBUTE_REMOVAL attributes=Hidden, Archive status=verified operations=1
+PASS declared attributes rename policy and added removal
+ARCHIVE_HIDDEN_CONFLICT kind=Modified operations=0 status=conflict
+ARCHIVE_HIDDEN_CONFLICT kind=Renamed operations=0 status=conflict
+PASS Archive Hidden C attribute drift rejects supported operations
+ATTRIBUTE_DELETE_REFUSAL attributes=Hidden status=no operations applied operations=0 exists=False
+ATTRIBUTE_DELETE_REFUSAL attributes=Hidden, Archive status=no operations applied operations=0 exists=False
+PASS other non-Archive deletion targets refuse before creation
+STATE_OPEN_FAILURE exception=UnauthorizedAccessException connection_state=Closed
+STATE_ACL_RESTORED=private
+PASS failed state open disposes connection immediately
+REAL_CREATE_CALL=FileMetadata.CreateWithSecurity/FileInfo.Create(CreateNew) boundary=1 error=IOException: The file 'E:\BlastRadiusFixture-a2ba50d8849c44fa8043691a2624d294\work\alpha.txt' already exists. before=Absent competitor=Present volume=1180385085 id=7881299349308995 links=1 attributes=Archive length=18 hash=2ED96F88D31CF42C58BA553FA301FAE4CE1CB64DFFF2057B0C57EEEE23B5E7FB security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } after=Present volume=1180385085 id=7881299349308995 links=1 attributes=Archive length=18 hash=2ED96F88D31CF42C58BA553FA301FAE4CE1CB64DFFF2057B0C57EEEE23B5E7FB security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } plan=in_doubt journal=in_doubt safety=absent-C-no-object applied=0
+PASS real CreateNew collision audits occupied target
+REAL_RENAME_CALL=WindowsFiles.RenameByHandle/SetFileInformationByHandle boundary=1 error=Win32Exception: 当文件已存在时，无法创建该文件。 source_before=Absent destination_before=Present volume=1180385085 id=52635820646303158 links=1 attributes=Archive length=6 hash=6DB7D803E74F1FFA7D8F5ADC0BF95B3E15BF4C8373FFFADF546227CC6C6742CB security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } competitor=Present volume=1180385085 id=13792273860232773 links=1 attributes=Archive length=17 hash=092569EEC29C07AF97BBF59610F840F9234C5C6021B4101E42D22623E3630AD2 security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } source_after=Present volume=1180385085 id=13792273860232773 links=1 attributes=Archive length=17 hash=092569EEC29C07AF97BBF59610F840F9234C5C6021B4101E42D22623E3630AD2 security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } destination_after=Present volume=1180385085 id=52635820646303158 links=1 attributes=Archive length=6 hash=6DB7D803E74F1FFA7D8F5ADC0BF95B3E15BF4C8373FFFADF546227CC6C6742CB security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } plan=in_doubt journal=in_doubt safety=6DB7D803E74F1FFA7D8F5ADC0BF95B3E15BF4C8373FFFADF546227CC6C6742CB applied=0
+PASS real handle rename collision audits both ends
+REAL_PARTIAL_CALL=FileMetadata.CreateWithSecurity/FileInfo.Create(CreateNew) calls=2 first=Present volume=1180385085 id=55169095436699062 links=1 attributes=Archive length=12 hash=C09B72F1BDB9E1625CDCC9EFB73C8B1AD35241DD6D9D532057DD6A7E5B0F7E3F security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } second_competitor=Present volume=1180385085 id=30399297486161454 links=1 attributes=Archive length=17 hash=D3D04FC7C2DB1AB6F9BBE3179178952F20007EED090FB878887AF6BD0ADEB1ED security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } second_after=Present volume=1180385085 id=30399297486161454 links=1 attributes=Archive length=17 hash=D3D04FC7C2DB1AB6F9BBE3179178952F20007EED090FB878887AF6BD0ADEB1ED security=FileSecurityState { Version = owner-dacl-attributes-v1, OwnerSid = S-1-5-21-713989218-1966541515-4255962209-1001, AccessSddl = O:S-1-5-21-713989218-1966541515-4255962209-1001D:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU), DaclProtected = False } error=IOException: The file 'E:\BlastRadiusFixture-5741798fd97e4c27bad96333249129e0\work\alpha.txt' already exists. plan=in_doubt journal=verified,in_doubt applied=1
+PASS real primitive failure after verified operation audits partial
+TOKEN_JOURNAL production_SavePlan_after_termination=true bytes=16928 worker_exit=-2146232797 no_plaintext=true
+TOKEN_STATE phase=baseline after apply published_objects=2 database=1 no_plaintext=true
+TOKEN_BASELINE pending_after_write=2 token_published=1 apply=verified operations=1
+PASS baseline fake token process and outputs
+TOKEN_JOURNAL production_SavePlan_after_termination=true bytes=16928 worker_exit=-2146232797 no_plaintext=true
+TOKEN_STATE phase=session after apply published_objects=2 database=1 no_plaintext=true
+TOKEN_SESSION pending_after_write=2 token_published=1 safety_observed=True conflict=no operations applied apply=verified
+PASS session fake token safety process and outputs
+TOKEN_JOURNAL production_SavePlan_after_termination=true bytes=16928 worker_exit=-2146232797 no_plaintext=true
+TOKEN_STATE phase=excluded move after report published_objects=1 database=1 no_plaintext=true
+TOKEN_EXCLUDED pending_after_write=1 token_published=1 excluded_target_allowed=true state_plaintext=false
+PASS excluded move fake token process and outputs
+TOKEN_TERMINATED worker_exit=-2146232797 pending_count=1 pending_bytes=83 stderr_token=false
+PASS terminated baseline object leaves encrypted pending token
+RESULT: Passed=127 Failed=0 Skipped=0 Blocked=1

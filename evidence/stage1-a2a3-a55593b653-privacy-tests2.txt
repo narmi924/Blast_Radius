@@ -1,0 +1,17 @@
+PASS fake token never enters persistent plaintext
+PASS new token safety copy stays encrypted
+TOKEN_JOURNAL production_SavePlan_after_termination=true bytes=16928 worker_exit=-2146232797 no_plaintext=true
+TOKEN_STATE phase=baseline after apply published_objects=2 database=1 no_plaintext=true
+TOKEN_BASELINE pending_after_write=2 token_published=1 apply=verified operations=1
+PASS baseline fake token process and outputs
+TOKEN_JOURNAL production_SavePlan_after_termination=true bytes=16928 worker_exit=-2146232797 no_plaintext=true
+TOKEN_STATE phase=session after apply published_objects=2 database=1 no_plaintext=true
+TOKEN_SESSION pending_after_write=2 token_published=1 safety_observed=True conflict=no operations applied apply=verified
+PASS session fake token safety process and outputs
+TOKEN_JOURNAL production_SavePlan_after_termination=true bytes=16928 worker_exit=-2146232797 no_plaintext=true
+TOKEN_STATE phase=excluded move after report published_objects=1 database=1 no_plaintext=true
+TOKEN_EXCLUDED pending_after_write=1 token_published=1 excluded_target_allowed=true state_plaintext=false
+PASS excluded move fake token process and outputs
+TOKEN_TERMINATED worker_exit=-2146232797 pending_count=1 pending_bytes=83 stderr_token=false
+PASS terminated baseline object leaves encrypted pending token
+RESULT: Passed=6 Failed=0 Skipped=0 Blocked=0

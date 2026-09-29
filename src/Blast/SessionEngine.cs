@@ -927,6 +927,7 @@ internal sealed class SessionEngine
                 parents.Check();
                 if (change.Baseline.Attributes != FileAttributes.Archive)
                     throw new NotSupportedException("Deleted file attributes cannot be created before content safely.");
+                BoundaryForTest?.Invoke("before_create_new");
                 using var stream = FileMetadata.CreateWithSecurity(path, change.Baseline.Security!);
                 var created = WindowsFiles.ValidateSupportedLeaf(stream.SafeFileHandle, path);
                 if (FileMetadata.Read(stream) != change.Baseline.Security ||
@@ -966,6 +967,7 @@ internal sealed class SessionEngine
                     throw new InvalidOperationException("Renamed file content changed.");
                 parents.Check();
                 ValidateExecutableLeaf(handle, path, change.Final);
+                BoundaryForTest?.Invoke("before_rename_by_handle");
                 WindowsFiles.RenameByHandle(handle, source);
                 BoundaryForTest?.Invoke("target_modified");
                 using (var stream = new FileStream(handle, FileAccess.Read))

@@ -1,0 +1,11 @@
+  Blast -> E:\Projects\Kaspi\Blast_Radius\src\Blast\bin\Debug\net10.0-windows\Blast.dll
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3445,9): warning CS8604: “ChangeRecord Enumerable.Single<ChangeRecord>(IEnumerable<ChangeRecord> source, Func<ChangeRecord, bool> predicate)”中的形参“source”可能传入 null 引用实参。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+  Blast.Tests -> E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\bin\Debug\net10.0-windows\Blast.Tests.dll
+
+已成功生成。
+
+E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs(3445,9): warning CS8604: “ChangeRecord Enumerable.Single<ChangeRecord>(IEnumerable<ChangeRecord> source, Func<ChangeRecord, bool> predicate)”中的形参“source”可能传入 null 引用实参。 [E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Blast.Tests.csproj]
+    1 个警告
+    0 个错误
+
+已用时间 00:00:02.79

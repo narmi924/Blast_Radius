@@ -13,6 +13,8 @@ if (args.Length > 0 && args[0] == "hold-lock") return HoldLock(args);
 if (args.Length > 0 && args[0] == "apply-worker") return ApplyWorker(args);
 if (args.Length > 0 && args[0] == "preview-worker") return PreviewWorker(args);
 if (args.Length > 0 && args[0] == "object-save-worker") return ObjectSaveWorker(args);
+if (args.Length > 0 && args[0] == "privacy-run-worker") return PrivacyRunWorker(args);
+if (args.Length > 0 && args[0] == "privacy-journal-worker") return PrivacyJournalWorker(args);
 if (args.Length > 0 && args[0] == "stdio-child") return StdioChild(args);
 if (args.Length > 0 && args[0] == "stdio-wrapper") return StdioWrapper(args);
 if (args.Length > 0 && args[0] == "ctrlc-child") return CtrlCChild(args);
@@ -66,6 +68,10 @@ static int Mutate(string[] args)
         case "double-modify":
             File.WriteAllText(a, "after");
             File.WriteAllText(Path.Combine(fixture.Root, "bravo.txt"), "after bravo");
+            break;
+        case "double-delete":
+            File.Delete(a);
+            File.Delete(Path.Combine(fixture.Root, "bravo.txt"));
             break;
         case "swap":
             string b = Path.Combine(fixture.Root, "bravo.txt");
@@ -263,6 +269,37 @@ static int ObjectSaveWorker(string[] args)
         Environment.FailFast("Synthetic new-object termination at " + boundary + ".");
     };
     store.Save(Encoding.UTF8.GetBytes(payload));
+    return 0;
+}
+
+static int PrivacyRunWorker(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    var engine = new SessionEngine(fixture);
+    ObjectStore.PublicationBoundaryForTest = (boundary, path) =>
+    {
+        if (boundary != "encrypted_temp_flushed") return;
+        File.WriteAllText(Path.Combine(fixture.StateDirectory, "privacy-crash.signal"),
+            Path.GetFileName(path));
+        Environment.FailFast("Synthetic termination after encrypted baseline object flush.");
+    };
+    engine.Run(Child(fixture, "modify"));
+    return 0;
+}
+
+static int PrivacyJournalWorker(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    var engine = new SessionEngine(fixture);
+    StateStore.BeforePlanCommitForTest = journal =>
+    {
+        if (!File.Exists(journal) || new FileInfo(journal).Length == 0)
+            throw new IOException("Production SavePlan journal did not exist before commit.");
+        File.WriteAllText(Path.Combine(fixture.StateDirectory, "privacy-journal.signal"),
+            Path.GetFileName(journal));
+        Environment.FailFast("Synthetic termination during production SavePlan transaction.");
+    };
+    engine.Preview(args[3], [args[4]]);
     return 0;
 }
 
@@ -611,6 +648,13 @@ static int All(string? filter = null)
         ,("Archive Hidden C attribute drift rejects supported operations", ArchiveHiddenDriftRejects)
         ,("other non-Archive deletion targets refuse before creation", OtherNonArchiveDeletedPreflight)
         ,("failed state open disposes connection immediately", FailedStateOpenDisposesConnection)
+        ,("real CreateNew collision audits occupied target", RealCreateCollisionAudit)
+        ,("real handle rename collision audits both ends", RealRenameCollisionAudit)
+        ,("real primitive failure after verified operation audits partial", RealPartialPrimitiveFailureAudit)
+        ,("baseline fake token process and outputs", BaselineTokenArtifacts)
+        ,("session fake token safety process and outputs", SessionTokenArtifacts)
+        ,("excluded move fake token process and outputs", ExcludedMoveTokenArtifacts)
+        ,("terminated baseline object leaves encrypted pending token", TerminatedTokenPending)
     };
     int failures = 0, passed = 0, skipped = 0, blocked = 0;
     var selected = tests.Where(t => filter is null || t.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -3314,6 +3358,427 @@ static void FailedStateOpenDisposesConnection()
         Console.WriteLine("STATE_ACL_RESTORED=private");
     }
     using var recovered = new StateStore(fixture.StateDirectory).AcquireLock();
+}
+
+static string FileEvidence(string path)
+{
+    if (!File.Exists(path)) return "Absent";
+    using var handle = WindowsFiles.OpenFile(path, write: false);
+    var identity = WindowsFiles.ValidateSupportedLeaf(handle, path);
+    using var stream = new FileStream(handle, FileAccess.Read);
+    byte[] bytes = new byte[stream.Length];
+    stream.ReadExactly(bytes);
+    return $"Present volume={identity.Volume} id={identity.Index} links={identity.Links} " +
+        $"attributes={identity.Attributes} length={bytes.Length} hash={ObjectStore.Hash(bytes)} " +
+        $"security={FileMetadata.Read(stream)}";
+}
+
+static void RealCreateCollisionAudit()
+{
+    using var fixture = SyntheticFixture.Create();
+    string target = Path.Combine(fixture.Root, "alpha.txt");
+    File.WriteAllText(target, "before");
+    var engine = new SessionEngine(fixture);
+    var run = engine.Run(Child(fixture, "delete"));
+    Check(run.BlastStatus == "ok", "Deleted-file fixture did not complete.");
+    var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Deleted);
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    var otherPlan = engine.Preview(run.SessionId, [change.Id]);
+    string before = FileEvidence(target);
+    string parentSecurity = AccessSddl(fixture.Root, directory: true);
+    string? competitor = null;
+    int primitiveBoundary = 0;
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage != "before_create_new") return;
+        primitiveBoundary++;
+        File.WriteAllText(target, "competitor-created");
+        competitor = FileEvidence(target);
+    };
+    var result = engine.Apply(plan.Id, plan.Hash);
+    engine.BoundaryForTest = null;
+    var operation = result.Operations.Single();
+    string after = FileEvidence(target);
+    using (engine.State.AcquireLock()) engine.State.AuditUnresolved();
+    var audited = engine.State.LoadPlan(plan.Id);
+    string afterAudit = FileEvidence(target);
+    bool nextRunStarted = false;
+    try { engine.Run(Child(fixture, "mark")); nextRunStarted = true; }
+    catch (InvalidOperationException) { }
+    Throws<InvalidOperationException>(() => engine.Apply(otherPlan.Id, otherPlan.Hash));
+    Console.WriteLine($"REAL_CREATE_CALL=FileMetadata.CreateWithSecurity/FileInfo.Create(CreateNew) " +
+        $"boundary={primitiveBoundary} error={operation.Message} before={before} competitor={competitor} " +
+        $"after={after} plan={audited.Status} journal={audited.Operations.Single().Status} " +
+        $"safety={operation.SafetyObjectId ?? "absent-C-no-object"} applied={result.OperationsApplied}");
+    Check(before == "Absent" && primitiveBoundary == 1 && competitor == after && afterAudit == after &&
+          result.OperationsApplied == 0 && operation.Status == "in_doubt" &&
+          operation.Message?.Contains("IOException") == true &&
+          audited.Status == "in_doubt" && audited.Operations.Single().Status == "in_doubt" &&
+          operation.SafetyObjectId is null && !nextRunStarted &&
+          !File.Exists(Path.Combine(fixture.StateDirectory, "child-started.signal")) &&
+          AccessSddl(fixture.Root, directory: true) == parentSecurity,
+        "Real CreateNew failure overwrote competitor, lost journal, or permitted another mutation.");
+}
+
+static void RealRenameCollisionAudit()
+{
+    using var fixture = SyntheticFixture.Create();
+    string source = Path.Combine(fixture.Root, "alpha.txt");
+    string destination = Path.Combine(fixture.Root, "beta.txt");
+    File.WriteAllText(source, "before");
+    var engine = new SessionEngine(fixture);
+    var run = engine.Run(Child(fixture, "rename"));
+    Check(run.BlastStatus == "ok", "Rename fixture did not complete.");
+    var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Renamed);
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    string beforeSource = FileEvidence(source);
+    string beforeDestination = FileEvidence(destination);
+    string parentSecurity = AccessSddl(fixture.Root, directory: true);
+    string? competitor = null;
+    int primitiveBoundary = 0;
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage != "before_rename_by_handle") return;
+        primitiveBoundary++;
+        File.WriteAllText(source, "competitor-source");
+        competitor = FileEvidence(source);
+    };
+    var result = engine.Apply(plan.Id, plan.Hash);
+    engine.BoundaryForTest = null;
+    var operation = result.Operations.Single();
+    string afterSource = FileEvidence(source);
+    string afterDestination = FileEvidence(destination);
+    using (engine.State.AcquireLock()) engine.State.AuditUnresolved();
+    var audited = engine.State.LoadPlan(plan.Id);
+    string sourceAfterAudit = FileEvidence(source);
+    string destinationAfterAudit = FileEvidence(destination);
+    Console.WriteLine($"REAL_RENAME_CALL=WindowsFiles.RenameByHandle/SetFileInformationByHandle " +
+        $"boundary={primitiveBoundary} error={operation.Message} source_before={beforeSource} " +
+        $"destination_before={beforeDestination} competitor={competitor} source_after={afterSource} " +
+        $"destination_after={afterDestination} plan={audited.Status} journal={audited.Operations.Single().Status} " +
+        $"safety={operation.SafetyObjectId} applied={result.OperationsApplied}");
+    Check(beforeSource == "Absent" && primitiveBoundary == 1 && competitor == afterSource &&
+          afterSource == sourceAfterAudit && beforeDestination == afterDestination &&
+          afterDestination == destinationAfterAudit && result.OperationsApplied == 0 &&
+          operation.Status == "in_doubt" && operation.Message?.Contains("Win32Exception") == true &&
+          operation.SafetyObjectId is not null &&
+          engine.Objects.Read(operation.SafetyObjectId).AsSpan().SequenceEqual(Encoding.UTF8.GetBytes("before")) &&
+          audited.Status == "in_doubt" && audited.Operations.Single().Status == "in_doubt" &&
+          AccessSddl(fixture.Root, directory: true) == parentSecurity,
+        "Real rename failure lost a path, changed the competitor, or misclassified the journal.");
+}
+
+static void RealPartialPrimitiveFailureAudit()
+{
+    using var fixture = SyntheticFixture.Create();
+    string alpha = Path.Combine(fixture.Root, "alpha.txt");
+    string bravo = Path.Combine(fixture.Root, "bravo.txt");
+    File.WriteAllText(alpha, "before-alpha");
+    File.WriteAllText(bravo, "before-bravo");
+    string parentSecurity = AccessSddl(fixture.Root, directory: true);
+    var engine = new SessionEngine(fixture);
+    var run = engine.Run(Child(fixture, "double-delete"));
+    Check(run.BlastStatus == "ok", "Two-delete fixture did not complete.");
+    var report = engine.Report(run.SessionId);
+    Check(report.Changes?.Count == 2 && report.Changes.All(c => c.Kind == ChangeKind.Deleted),
+        "Expected two deletion changes.");
+    var plan = engine.Preview(run.SessionId, report.Changes!.Select(c => c.Id));
+    string firstPath = Path.Combine(fixture.Root,
+        report.Changes!.Single(c => c.Id == plan.ChangeIds[0]).Path);
+    string secondPath = Path.Combine(fixture.Root,
+        report.Changes!.Single(c => c.Id == plan.ChangeIds[1]).Path);
+    int primitiveCalls = 0;
+    string? competitor = null;
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage != "before_create_new") return;
+        if (++primitiveCalls == 2)
+        {
+            File.WriteAllText(secondPath, "competitor-second");
+            competitor = FileEvidence(secondPath);
+        }
+    };
+    var result = engine.Apply(plan.Id, plan.Hash);
+    engine.BoundaryForTest = null;
+    string firstAfter = FileEvidence(firstPath);
+    string secondAfter = FileEvidence(secondPath);
+    using (engine.State.AcquireLock()) engine.State.AuditUnresolved();
+    var audited = engine.State.LoadPlan(plan.Id);
+    string firstAfterAudit = FileEvidence(firstPath);
+    string secondAfterAudit = FileEvidence(secondPath);
+    Console.WriteLine($"REAL_PARTIAL_CALL=FileMetadata.CreateWithSecurity/FileInfo.Create(CreateNew) " +
+        $"calls={primitiveCalls} first={firstAfter} second_competitor={competitor} second_after={secondAfter} " +
+        $"error={result.Operations[1].Message} plan={audited.Status} " +
+        $"journal={string.Join(',', audited.Operations.Select(o => o.Status))} applied={result.OperationsApplied}");
+    Check(primitiveCalls == 2 && result.OperationsApplied == 1 &&
+          result.Operations[0].Status == "verified" && result.Operations[1].Status == "in_doubt" &&
+          result.Operations[1].Message?.Contains("IOException") == true &&
+          firstAfter.StartsWith("Present") && File.ReadAllText(firstPath) ==
+              (Path.GetFileName(firstPath) == "alpha.txt" ? "before-alpha" : "before-bravo") &&
+          competitor == secondAfter && firstAfterAudit == firstAfter && secondAfterAudit == secondAfter &&
+          audited.Status == "in_doubt" &&
+          audited.Operations[0].Status == "verified" && audited.Operations[1].Status == "in_doubt" &&
+          audited.Operations.All(o => o.SafetyObjectId is null) &&
+          AccessSddl(fixture.Root, directory: true) == parentSecurity,
+        "Real second CreateNew failure lost first verified item or overwrote competitor.");
+}
+
+static int PatternOffset(byte[] bytes, byte[] pattern)
+{
+    for (int i = 0; i <= bytes.Length - pattern.Length; i++)
+        if (bytes.AsSpan(i, pattern.Length).SequenceEqual(pattern)) return i;
+    return -1;
+}
+
+static void AssertNoToken(byte[] bytes, string token, string artifact, string phase)
+{
+    foreach (var (encoding, pattern) in new[]
+        { ("UTF-8", Encoding.UTF8.GetBytes(token)),
+          ("UTF-16LE", Encoding.Unicode.GetBytes(token)),
+          ("UTF-16BE", Encoding.BigEndianUnicode.GetBytes(token)) })
+    {
+        int offset = PatternOffset(bytes, pattern);
+        Check(offset < 0, $"Token found: artifact={artifact} phase={phase} encoding={encoding} offset={offset}");
+    }
+    Check(!Encoding.UTF8.GetString(bytes).Contains(token, StringComparison.Ordinal) &&
+          !Encoding.Unicode.GetString(bytes).Contains(token, StringComparison.Ordinal),
+        $"Decoded token found: artifact={artifact} phase={phase}");
+}
+
+static void AssertNoTokenText(string text, string token, string artifact, string phase) =>
+    AssertNoToken(Encoding.UTF8.GetBytes(text), token, artifact, phase);
+
+static void CheckStateArtifacts(SyntheticFixture fixture, string token, string phase)
+{
+    int encrypted = 0, database = 0;
+    foreach (string file in Directory.GetFiles(fixture.StateDirectory, "*", SearchOption.AllDirectories))
+    {
+        string kind = file.EndsWith(".bro", StringComparison.OrdinalIgnoreCase) ? "published object" :
+            Path.GetFileName(file).StartsWith(".pending-", StringComparison.Ordinal) ? "pending object" :
+            Path.GetFileName(file) == "state.db" ? "SQLite database" :
+            Path.GetFileName(file).StartsWith("state.db-", StringComparison.Ordinal) ? "SQLite auxiliary" :
+            "state file";
+        if (kind == "published object") encrypted++;
+        if (kind == "SQLite database") database++;
+        AssertNoToken(File.ReadAllBytes(file), token, kind, phase);
+    }
+    Check(encrypted > 0 && database == 1,
+        $"Required published object/database did not appear: phase={phase} objects={encrypted} db={database}");
+    Console.WriteLine($"TOKEN_STATE phase={phase} published_objects={encrypted} database={database} no_plaintext=true");
+}
+
+static void TokenReports(SessionEngine engine, string sessionId, string token, string phase,
+    ApplyResult? result = null)
+{
+    string text = engine.ReportText(sessionId);
+    string json = engine.ReportJson(sessionId);
+    AssertNoTokenText(text, token, "text report", phase);
+    AssertNoTokenText(json, token, "JSON report raw", phase);
+    using var parsed = JsonDocument.Parse(json);
+    AssertNoTokenText(parsed.RootElement.ToString(), token, "JSON report parsed", phase);
+    if (result is not null)
+        AssertNoTokenText(JsonSerializer.Serialize(result), token, "apply result", phase);
+}
+
+static void CheckProductionJournalAfterTermination(SyntheticFixture fixture,
+    string sessionId, string changeId, string token)
+{
+    using var worker = Worker("privacy-journal-worker", fixture, sessionId, changeId);
+    string stderr = worker.StandardError.ReadToEnd();
+    Check(worker.WaitForExit(10000) && worker.ExitCode != 0,
+        "Journal worker did not terminate at production SavePlan transaction.");
+    AssertNoTokenText(stderr, token, "journal worker stderr", "after process termination");
+    string signal = Path.Combine(fixture.StateDirectory, "privacy-journal.signal");
+    string journal = Path.Combine(fixture.StateDirectory, "state.db-journal");
+    Check(File.Exists(signal) && File.ReadAllText(signal) == "state.db-journal" &&
+          File.Exists(journal), "Production transaction journal was not retained after termination.");
+    byte[] bytes = File.ReadAllBytes(journal);
+    Check(bytes.Length > 0, "Production transaction journal is empty after termination.");
+    AssertNoToken(bytes, token, "state.db-journal", "production SavePlan after process termination");
+    Console.WriteLine($"TOKEN_JOURNAL production_SavePlan_after_termination=true " +
+        $"bytes={bytes.Length} worker_exit={worker.ExitCode} no_plaintext=true");
+}
+
+static void BaselineTokenArtifacts()
+{
+    using var fixture = SyntheticFixture.Create();
+    string token = "FAKE_TOKEN_" + Guid.NewGuid().ToString("N");
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), token);
+    var engine = new SessionEngine(fixture);
+    int pending = 0, published = 0;
+    string tokenObject = ObjectStore.Hash(Encoding.UTF8.GetBytes(token)) + ".bro";
+    ObjectStore.PublicationBoundaryForTest = (stage, path) =>
+    {
+        if (stage == "encrypted_temp_flushed")
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            Check(bytes.Length > 40, "Baseline pending object was empty.");
+            AssertNoToken(bytes, token, ".pending-*", "baseline after encrypted flush");
+            pending++;
+        }
+        if (stage == "new_object_published")
+        {
+            AssertNoToken(File.ReadAllBytes(path), token, "published .bro", "baseline publish");
+            if (Path.GetFileName(path) == tokenObject) published++;
+        }
+    };
+    RunResult run;
+    try { run = engine.Run(Child(fixture, "modify")); }
+    finally { ObjectStore.PublicationBoundaryForTest = null; }
+    Check(run.BlastStatus == "ok" && pending > 0 && published == 1,
+        "Baseline token object did not pass flushed and published boundaries.");
+    var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Modified);
+    CheckProductionJournalAfterTermination(fixture, run.SessionId, change.Id, token);
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    var applied = engine.Apply(plan.Id, plan.Hash);
+    Check(applied!.Status == "verified" && applied.OperationsApplied == 1 &&
+          File.ReadAllText(Path.Combine(fixture.Root, "alpha.txt")) == token,
+        "Baseline token recovery did not finish normally.");
+    TokenReports(engine, run.SessionId, token, "baseline normal result", applied);
+    AssertNoTokenText(JsonSerializer.Serialize(run), token, "run result", "baseline normal result");
+    CheckStateArtifacts(fixture, token, "baseline after apply");
+    Console.WriteLine($"TOKEN_BASELINE pending_after_write={pending} token_published={published} " +
+        $"apply={applied.Status} operations={applied.OperationsApplied}");
+}
+
+static void SessionTokenArtifacts()
+{
+    using var fixture = SyntheticFixture.Create();
+    string token = "FAKE_TOKEN_" + Guid.NewGuid().ToString("N");
+    string target = Path.Combine(fixture.Root, "alpha.txt");
+    File.WriteAllText(target, "before");
+    var engine = new SessionEngine(fixture);
+    int pending = 0, tokenPublished = 0;
+    string tokenObject = ObjectStore.Hash(Encoding.UTF8.GetBytes(token)) + ".bro";
+    ObjectStore.PublicationBoundaryForTest = (stage, path) =>
+    {
+        if (stage == "encrypted_temp_flushed")
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            Check(bytes.Length > 40, "Session pending object was empty.");
+            AssertNoToken(bytes, token, ".pending-*", "final scan after encrypted flush");
+            pending++;
+        }
+        if (stage == "new_object_published")
+        {
+            AssertNoToken(File.ReadAllBytes(path), token, "published .bro", "final scan publish");
+            if (Path.GetFileName(path) == tokenObject) tokenPublished++;
+        }
+    };
+    RunResult run;
+    try { run = engine.Run(Child(fixture, "token-after", token)); }
+    finally { ObjectStore.PublicationBoundaryForTest = null; }
+    Check(run.BlastStatus == "ok" && pending > 0 && tokenPublished == 1,
+        "Session-only token did not reach encrypted final-scan object.");
+    var change = OnlyChange(engine.Report(run.SessionId), ChangeKind.Modified);
+    bool safetyObserved = false;
+    RestorePlan? plan = null;
+    engine.BoundaryForTest = stage =>
+    {
+        if (stage != "safety_copied") return;
+        var safety = engine.State.LoadPlan(plan!.Id).Operations.Single().SafetyObjectId;
+        Check(safety == ObjectStore.Hash(Encoding.UTF8.GetBytes(token)),
+            "Safety reference did not point to session token object.");
+        AssertNoToken(File.ReadAllBytes(Path.Combine(fixture.StateDirectory, "objects", safety + ".bro")),
+            token, "safety .bro", "after safety_copied durable before intent");
+        safetyObserved = true;
+    };
+    ApplyResult? applied = null;
+    ApplyResult? rejected = null;
+    CheckProductionJournalAfterTermination(fixture, run.SessionId, change.Id, token);
+    var conflict = engine.Preview(run.SessionId, [change.Id]);
+    File.WriteAllText(target, "third-party-value");
+    rejected = engine.Apply(conflict.Id, conflict.Hash);
+    Check(rejected.Status == "no operations applied" && rejected.OperationsApplied == 0,
+        "Failure-path fixture did not reach preflight conflict.");
+    TokenReports(engine, run.SessionId, token, "conflict result", rejected);
+    File.WriteAllText(target, token);
+    plan = engine.Preview(run.SessionId, [change.Id]);
+    applied = engine.Apply(plan.Id, plan.Hash);
+    engine.BoundaryForTest = null;
+    Check(safetyObserved && applied!.Status == "verified" && applied.OperationsApplied == 1 &&
+          applied.Operations.Single().SafetyObjectId == ObjectStore.Hash(Encoding.UTF8.GetBytes(token)) &&
+          File.ReadAllText(target) == "before",
+        "Session token was not durably captured as encrypted safety copy before restore.");
+    TokenReports(engine, run.SessionId, token, "session normal result", applied);
+    AssertNoTokenText(JsonSerializer.Serialize(run), token, "run result", "session normal result");
+    CheckStateArtifacts(fixture, token, "session after apply");
+    Console.WriteLine($"TOKEN_SESSION pending_after_write={pending} token_published={tokenPublished} " +
+        $"safety_observed={safetyObserved} conflict={rejected!.Status} apply={applied.Status}");
+}
+
+static void ExcludedMoveTokenArtifacts()
+{
+    using var fixture = SyntheticFixture.Create();
+    string token = "FAKE_TOKEN_" + Guid.NewGuid().ToString("N");
+    string source = Path.Combine(fixture.Root, "alpha.txt");
+    string excluded = Path.Combine(fixture.Root, ".env");
+    File.WriteAllText(source, token);
+    var engine = new SessionEngine(fixture);
+    int pending = 0, tokenPublished = 0;
+    string tokenObject = ObjectStore.Hash(Encoding.UTF8.GetBytes(token)) + ".bro";
+    ObjectStore.PublicationBoundaryForTest = (stage, path) =>
+    {
+        if (stage == "encrypted_temp_flushed")
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            Check(bytes.Length > 40, "Excluded-move baseline pending object was empty.");
+            AssertNoToken(bytes, token, ".pending-*", "excluded move baseline after flush");
+            pending++;
+        }
+        if (stage == "new_object_published")
+        {
+            AssertNoToken(File.ReadAllBytes(path), token, "published .bro", "excluded move baseline publish");
+            if (Path.GetFileName(path) == tokenObject) tokenPublished++;
+        }
+    };
+    RunResult run;
+    try { run = engine.Run(Child(fixture, "move-to-excluded")); }
+    finally { ObjectStore.PublicationBoundaryForTest = null; }
+    var report = engine.Report(run.SessionId);
+    Check(run.BlastStatus == "ok" && pending > 0 && tokenPublished == 1 &&
+          File.ReadAllText(excluded) == token && !File.Exists(source) &&
+          report.Final!.Keys.All(k => k != ".env"),
+        "Excluded move fixture failed or excluded target entered coverage.");
+    var change = OnlyChange(report, ChangeKind.Deleted);
+    CheckProductionJournalAfterTermination(fixture, run.SessionId, change.Id, token);
+    var plan = engine.Preview(run.SessionId, [change.Id]);
+    Check(plan.Operations.Count == 1, "Excluded-move preview was not saved.");
+    TokenReports(engine, run.SessionId, token, "excluded move normal report");
+    AssertNoTokenText(JsonSerializer.Serialize(run), token, "run result", "excluded move normal result");
+    CheckStateArtifacts(fixture, token, "excluded move after report");
+    Console.WriteLine($"TOKEN_EXCLUDED pending_after_write={pending} token_published={tokenPublished} " +
+        "excluded_target_allowed=true state_plaintext=false");
+}
+
+static void TerminatedTokenPending()
+{
+    using var fixture = SyntheticFixture.Create();
+    string token = "FAKE_TOKEN_" + Guid.NewGuid().ToString("N");
+    File.WriteAllText(Path.Combine(fixture.Root, "alpha.txt"), token);
+    _ = new SessionEngine(fixture);
+    using var worker = Worker("privacy-run-worker", fixture);
+    string stderr = worker.StandardError.ReadToEnd();
+    Check(worker.WaitForExit(10000) && worker.ExitCode != 0,
+        "Privacy worker did not terminate at encrypted baseline flush.");
+    AssertNoTokenText(stderr, token, "worker stderr", "after process termination");
+    string signal = Path.Combine(fixture.StateDirectory, "privacy-crash.signal");
+    Check(File.Exists(signal), "Privacy worker did not reach flushed baseline object boundary.");
+    string[] pending = Directory.GetFiles(Path.Combine(fixture.StateDirectory, "objects"), ".pending-*");
+    Check(pending.Length == 1 && Path.GetFileName(pending[0]) == File.ReadAllText(signal),
+        "Flushed pending object was not retained after worker termination.");
+    byte[] bytes = File.ReadAllBytes(pending[0]);
+    Check(bytes.Length > 40, "Post-termination pending object is empty.");
+    AssertNoToken(bytes, token, ".pending-*", "after process termination following flush");
+    CheckStateArtifactsAfterTermination(fixture, token);
+    Console.WriteLine($"TOKEN_TERMINATED worker_exit={worker.ExitCode} pending_count={pending.Length} " +
+        $"pending_bytes={bytes.Length} stderr_token=false");
+}
+
+static void CheckStateArtifactsAfterTermination(SyntheticFixture fixture, string token)
+{
+    foreach (string file in Directory.GetFiles(fixture.StateDirectory, "*", SearchOption.AllDirectories))
+        AssertNoToken(File.ReadAllBytes(file), token, Path.GetFileName(file), "after process termination");
 }
 
 static void Check(bool condition, string message)

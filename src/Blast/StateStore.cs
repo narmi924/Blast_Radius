@@ -8,6 +8,7 @@ internal sealed class StateStore
 {
     internal static Action<SessionRecord>? BeforeSessionSaveForTest { get; set; }
     internal static Action<SqliteConnection>? AfterConnectionOpenedForTest { get; set; }
+    internal static Action<string>? BeforePlanCommitForTest { get; set; }
     private readonly string directory;
     private readonly string database;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -142,6 +143,7 @@ internal sealed class StateStore
             command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(operation, JsonOptions));
             command.ExecuteNonQuery();
         }
+        BeforePlanCommitForTest?.Invoke(database + "-journal");
         transaction.Commit();
     }
 
