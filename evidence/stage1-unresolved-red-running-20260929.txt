@@ -1,0 +1,7 @@
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL running save failure retains uncertain child barrier: System.Exception: Unconfirmed child allowed mutation: runBlocked=False, applyBlocked=False, target=before
+   at Program.<<Main>$>g__Check|0_138(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 2734
+   at Program.<<Main>$>g__AssertBlockedMutations|0_88(SessionEngine engine, SyntheticFixture fixture, RestorePlan plan, String target) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1740
+   at Program.<<Main>$>g__RunningSaveFailureBlocksMutations|0_93() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1836
+   at Program.<<Main>$>g__All|0_18(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 577
+TEST_EXIT=1

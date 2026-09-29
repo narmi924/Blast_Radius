@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 
 namespace Blast;
 
@@ -27,9 +28,29 @@ internal sealed class SessionEngine
     {
         using var storeLock = state.AcquireLock();
         using var cancellation = new RunCancellation(cancellationToken);
+        var attempt = new RunAttempt();
+        try { return RunLocked(command, cancellation, attempt); }
+        catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException or
+                                   System.ComponentModel.Win32Exception)
+        {
+            // A second write may fail too. Do not recurse into SaveSession or claim
+            // that an in-memory failure status was durably recorded.
+            var observed = attempt.Session;
+            return new RunResult(observed?.Id ?? "", "run_failed", observed?.ChildExitCode,
+                observed?.ChildProcessId, cancellation.Requests, cancellation.ConsoleControlMode,
+                DiagnosticPersisted: false, Error: ex.GetType().Name + ": " + ex.Message);
+        }
+    }
+
+    private sealed class RunAttempt { internal SessionRecord? Session; }
+
+    private RunResult RunLocked(ProcessStartInfo command, RunCancellation cancellation, RunAttempt attempt)
+    {
         state.AuditUnresolved();
         if (state.HasUnresolvedPlans())
             throw new InvalidOperationException("Unresolved restore intent blocks a new run in this state store.");
+        if (state.HasUnresolvedRuns())
+            throw new InvalidOperationException("Unresolved run blocks new run in this state store.");
         ValidateScopes();
         NormalizeCommand(command);
         string id = Guid.NewGuid().ToString("N");
@@ -50,10 +71,12 @@ internal sealed class SessionEngine
             {
                 Id = id, Root = fixture.Root, Scopes = [.. fixture.Scopes], Status = "interrupted",
                 Baseline = [], Coverage = "incomplete", CoverageDetail = coverage,
+                ChildLaunchState = "not_started",
                 ConsoleControlMode = cancellation.ConsoleControlMode,
                 CancelRequests = cancellation.Requests,
                 InterruptionReason = "cancelled_during_baseline"
             };
+            attempt.Session = interrupted;
             state.SaveSession(interrupted);
             return RunOutcome(interrupted, "interrupted");
         }
@@ -64,9 +87,11 @@ internal sealed class SessionEngine
             {
                 Id = id, Root = fixture.Root, Scopes = [.. fixture.Scopes], Status = "failed", Baseline = [],
                 Coverage = "failed", CoverageDetail = coverage,
+                ChildLaunchState = "not_started",
                 ConsoleControlMode = cancellation.ConsoleControlMode,
                 CancelRequests = cancellation.Requests
             };
+            attempt.Session = failed;
             state.SaveSession(failed);
             return RunOutcome(failed, "baseline_failed");
         }
@@ -79,10 +104,12 @@ internal sealed class SessionEngine
         {
             Id = id, Root = fixture.Root, Scopes = boundScopes, Status = "baselining", Baseline = baseline,
             BaselineDirectories = baselineDirectories,
+            ChildLaunchState = "not_started",
             ConsoleControlMode = cancellation.ConsoleControlMode,
             Coverage = baseline.Values.Any(x => x.Presence == Presence.Unknown) ? "failed" : "complete",
             CoverageDetail = coverage
         };
+        attempt.Session = session;
         state.SaveSession(session);
         try
         {
@@ -130,8 +157,18 @@ internal sealed class SessionEngine
             return InterruptRun(session, cancellation, "cancelled_before_child_start");
         }
 
+        try { cancellation.ThrowIfRequested(); }
+        catch (OperationCanceledException)
+        { return InterruptRun(session, cancellation, "cancelled_before_child_start"); }
+        // This is the last durable step before Process.Start. A failed commit
+        // cannot enter the launch catch, which conservatively treats Start itself
+        // as uncertain; the prior durable ready state still proves nonlaunch.
+        session.Status = "launch_pending";
+        session.ChildLaunchState = "possible";
+        state.SaveSession(session);
         try
         {
+            BoundaryForTest?.Invoke("launch_pending_durable");
             cancellation.ThrowIfRequested();
             using var child = Process.Start(command) ?? throw new IOException("Child process did not start.");
             session.ChildProcessId = child.Id;
@@ -148,6 +185,7 @@ internal sealed class SessionEngine
                 return InterruptRun(session, cancellation, "child_did_not_exit_within_5s_after_cancel");
             }
             session.ChildExitCode = child.ExitCode;
+            session.ChildLaunchState = "exited";
         }
         catch (OperationCanceledException)
         {
@@ -156,12 +194,15 @@ internal sealed class SessionEngine
         }
         catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
         {
-            session.Status = "failed";
+            // Process.Start can fail after the durable launch intent without a
+            // returned handle. An absent PID is not evidence that no child ran.
+            session.Status = "interrupted";
             session.Coverage = "incomplete";
             session.CoverageDetail.ScanFailure = "Child launch or wait failed: " + ex.GetType().Name;
+            session.InterruptionReason = "launch_or_running_state_uncertain";
             session.CancelRequests = cancellation.Requests;
             state.SaveSession(session);
-            return RunOutcome(session, "launch_failed");
+            return RunOutcome(session, "run_failed");
         }
 
         int requestsAtChildExit = cancellation.Requests;
@@ -203,7 +244,7 @@ internal sealed class SessionEngine
             return RunOutcome(session, session.Status == "complete" ? "ok" : "final_scan_incomplete");
         }
         catch (Exception ex) when (ex is OperationCanceledException or IOException or UnauthorizedAccessException or
-                                   NotSupportedException or System.ComponentModel.Win32Exception)
+                                   NotSupportedException or System.ComponentModel.Win32Exception or SqliteException)
         {
             bool interrupted = ex is OperationCanceledException || cancellation.Requests != requestsAtChildExit;
             session.Status = interrupted ? "interrupted" : "incomplete";
@@ -218,6 +259,7 @@ internal sealed class SessionEngine
 
     private RunResult InterruptRun(SessionRecord session, RunCancellation cancellation, string reason)
     {
+        if (session.ChildProcessId is null) session.ChildLaunchState = "not_started";
         session.Status = "interrupted";
         session.Coverage = "incomplete";
         session.InterruptionReason = reason;
@@ -495,6 +537,7 @@ internal sealed class SessionEngine
     internal string ReportJson(string sessionId)
     {
         var session = Report(sessionId);
+        bool blocked = state.HasUnresolvedRuns() || state.HasUnresolvedPlans();
         return JsonSerializer.Serialize(new
         {
             schema_version = 1,
@@ -507,6 +550,8 @@ internal sealed class SessionEngine
             cancel_requests = session.CancelRequests,
             console_control_mode = session.ConsoleControlMode,
             interruption_reason = session.InterruptionReason,
+            child_launch_state = session.ChildLaunchState,
+            store_modification_blocked = blocked,
             coverage = session.Coverage,
             coverage_detail = session.CoverageDetail,
             rule_version = session.RuleVersion,
@@ -524,7 +569,7 @@ internal sealed class SessionEngine
                 final_presence = change.Final.Presence.ToString().ToLowerInvariant(),
                 operation_supported = change.Kind != ChangeKind.Unsupported,
                 snapshot_integrity = SnapshotIntegrity(change),
-                apply_eligibility = "unverified",
+                apply_eligibility = blocked ? "blocked_unresolved_store_state" : "unverified",
                 unsupported_reason = change.UnsupportedReason
             })
         });
@@ -548,8 +593,10 @@ internal sealed class SessionEngine
     internal string ReportText(string sessionId)
     {
         var session = Report(sessionId);
+        bool blocked = state.HasUnresolvedRuns() || state.HasUnresolvedPlans();
         var builder = new StringBuilder();
         builder.AppendLine($"Session {session.Id}: {session.Status}; coverage={session.Coverage}; child exit={session.ChildExitCode}");
+        if (blocked) builder.AppendLine("Run and apply blocked: unresolved store state.");
         builder.AppendLine("Event history: unavailable; changes are final-state differences only. " +
             "Background processes are not tracked after the direct child exits.");
         foreach (var change in session.Changes ?? [])
@@ -662,6 +709,8 @@ internal sealed class SessionEngine
     {
         using var storeLock = state.AcquireLock();
         state.AuditUnresolved();
+        if (state.HasUnresolvedRuns())
+            throw new InvalidOperationException("Unresolved run blocks apply in this state store.");
         var plan = state.LoadPlan(planId);
         var execution = ValidateExecutionPayload(plan);
         if (!CryptographicOperations.FixedTimeEquals(

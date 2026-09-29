@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Blast;
+using Microsoft.Data.Sqlite;
 
 if (args.Length > 0 && args[0] == "mutate") return Mutate(args);
 if (args.Length > 0 && args[0] == "mutate-nested") return MutateNested(args);
@@ -17,6 +18,7 @@ if (args.Length > 0 && args[0] == "ctrlc-default-child") return CtrlCDefaultChil
 if (args.Length > 0 && args[0] == "ctrlc-wrapper") return CtrlCWrapper(args);
 if (args.Length > 0 && args[0] == "ctrlc-terminal-harness") return CtrlCTerminalHarness(args);
 if (args.Length > 0 && args[0] == "ctrlc-terminal-supervisor") return CtrlCTerminalSupervisor(args);
+if (args.Length > 0 && args[0] == "sqlite-failure-wrapper") return SqliteFailureWrapper(args);
 if (args.Length > 0 && args[0] == "run-worker") return RunWorker(args);
 if (args.Length > 0 && args[0] == "failure-wrapper") return FailureWrapper(args);
 if (args.Length > 0 && args[0] == "failfast-child") Environment.FailFast("Synthetic child failure.");
@@ -80,12 +82,16 @@ static int Mutate(string[] args)
         case "mark":
             File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"), "started");
             break;
+        case "mark-next":
+            File.WriteAllText(Path.Combine(fixture.StateDirectory, "next-child-started.signal"), "started");
+            break;
         case "exit-23":
             File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"), "started");
             return 23;
         case "hang":
             File.WriteAllText(Path.Combine(fixture.StateDirectory, "child-started.signal"),
                 Environment.ProcessId.ToString());
+            Directory.SetCurrentDirectory(fixture.StateDirectory);
             Thread.Sleep(TimeSpan.FromSeconds(30));
             break;
         case "external-modify-add":
@@ -163,6 +169,24 @@ static int FailureWrapper(string[] args)
     };
     var result = engine.Run(Child(fixture, "exit-23"));
     Console.WriteLine($"FAILURE_WRAPPER child={result.ChildExitCode} blast={result.BlastStatus}");
+    return result.WrapperExitCode;
+}
+
+static int SqliteFailureWrapper(string[] args)
+{
+    using var fixture = SyntheticFixture.AttachWorker(args[1], args[2]);
+    int terminalSaveAttempts = 0;
+    StateStore.BeforeSessionSaveForTest = session =>
+    {
+        if (session.Status is "complete" or "incomplete") terminalSaveAttempts++;
+    };
+    RunResult result;
+    try { result = new SessionEngine(fixture).Run(Child(fixture, "exit-23")); }
+    finally { StateStore.BeforeSessionSaveForTest = null; }
+    Console.WriteLine($"SQLITE_FAILURE child={result.ChildExitCode?.ToString() ?? "null"} " +
+        $"pid={result.ChildProcessId?.ToString() ?? "null"} blast={result.BlastStatus} " +
+        $"diagnostic_persisted={result.DiagnosticPersisted} " +
+        $"terminal_save_attempts={terminalSaveAttempts} error={result.Error}");
     return result.WrapperExitCode;
 }
 
@@ -538,6 +562,13 @@ static int All(string? filter = null)
         ,("failed final commit cannot report complete", FailedFinalCommit)
         ,("persistent final save failure audits interrupted", PersistentFinalSaveFailure)
         ,("Blast failure process exit overrides known child code", BlastFailureProcessExit)
+        ,("unconfirmed direct child blocks later run and apply", UnconfirmedChildBlocksMutations)
+        ,("terminated wrapper child blocks later run and apply", TerminatedWrapperBlocksMutations)
+        ,("running save failure retains uncertain child barrier", RunningSaveFailureBlocksMutations)
+        ,("prelaunch durable failure prevents child start", PrelaunchDurableFailurePreventsStart)
+        ,("baseline cancellation permits later run", BaselineCancellationPermitsLaterRun)
+        ,("confirmed completion permits later run", ConfirmedCompletionPermitsLaterRun)
+        ,("real SQLite double failure returns wrapper error", RealSqliteDoubleFailure)
         ,("missing object key preserves existing store", MissingObjectKey)
         ,("report separates supported kind from object integrity and apply state", ReportEligibility)
     };
@@ -1661,8 +1692,13 @@ static void PersistentFinalSaveFailure()
         if (session.Status is "complete" or "incomplete")
             throw new IOException("Injected persistent final persistence failure.");
     };
-    try { Throws<IOException>(() => engine.Run(Child(fixture, "modify"))); }
+    RunResult result;
+    try { result = engine.Run(Child(fixture, "modify")); }
     finally { StateStore.BeforeSessionSaveForTest = null; }
+    Check(result.BlastStatus == "run_failed" && result.WrapperExitCode == 70 &&
+          result.ChildExitCode == 0 && !result.DiagnosticPersisted &&
+          result.Error!.Contains("persistent final persistence failure"),
+        "Persistent final save failure escaped the shared error result or lost the observed child exit.");
     using (engine.State.AcquireLock()) engine.State.AuditUnresolved();
     var saved = engine.State.LoadSession(engine.State.SessionIdsForTest().Single());
     Check(saved.Status == "interrupted" && saved.Coverage == "incomplete" &&
@@ -1692,6 +1728,225 @@ static void BlastFailureProcessExit()
           saved.Status == "incomplete" && saved.FinalScanCompletedUtc is null,
         "Blast failure did not override wrapper exit while preserving child code: " + error + output);
     Console.WriteLine("EXIT_TRIPLE child=23 wrapper_process=70 test_executor=pass; blast=final_scan_failed");
+}
+
+static (RestorePlan Plan, string Target) ExistingPendingPlan(SyntheticFixture fixture, SessionEngine engine)
+{
+    string target = Path.Combine(fixture.Root, "alpha.txt");
+    File.WriteAllText(target, "before");
+    var first = engine.Run(Child(fixture, "modify"));
+    Check(first.BlastStatus == "ok" && first.ChildExitCode == 0 && File.ReadAllText(target) == "after",
+        "First synthetic session did not finish before the uncertain-child test.");
+    var report = engine.Report(first.SessionId);
+    return (engine.Preview(first.SessionId, [OnlyChange(report, ChangeKind.Modified).Id]), target);
+}
+
+static void AssertBlockedMutations(SessionEngine engine, SyntheticFixture fixture, RestorePlan plan, string target)
+{
+    bool runBlocked = false, applyBlocked = false;
+    try { engine.Run(Child(fixture, "mark-next")); }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("Unresolved run", StringComparison.Ordinal))
+    { runBlocked = true; }
+    try { engine.Apply(plan.Id, plan.Hash); }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("Unresolved run", StringComparison.Ordinal))
+    { applyBlocked = true; }
+    using var report = JsonDocument.Parse(engine.ReportJson(plan.SessionId));
+    bool reportBlocked = report.RootElement.GetProperty("store_modification_blocked").GetBoolean() &&
+        report.RootElement.GetProperty("changes")[0].GetProperty("apply_eligibility").GetString() ==
+        "blocked_unresolved_store_state";
+    Check(runBlocked && applyBlocked &&
+          reportBlocked &&
+          !File.Exists(Path.Combine(fixture.StateDirectory, "next-child-started.signal")) &&
+          File.ReadAllText(target) == "after",
+        $"Unconfirmed child allowed mutation: runBlocked={runBlocked}, applyBlocked={applyBlocked}, " +
+        $"target={File.ReadAllText(target)}");
+    Console.WriteLine("BLOCK_EVIDENCE new_child_started=false apply_operations=0 target=after");
+}
+
+static Process OwnedHangChild(SyntheticFixture fixture, int? expectedPid = null)
+{
+    string marker = Path.Combine(fixture.StateDirectory, "child-started.signal");
+    Check(SpinWait.SpinUntil(() => File.Exists(marker) &&
+        int.TryParse(File.ReadAllText(marker), out _), TimeSpan.FromSeconds(10)),
+        "Synthetic direct child did not publish its PID.");
+    int pid = int.Parse(File.ReadAllText(marker));
+    Check(expectedPid is null || expectedPid == pid, "Child PID differs from the observed Run result.");
+    var process = Process.GetProcessById(pid);
+    Check(!process.HasExited, "Synthetic direct child already exited before the barrier test.");
+    return process;
+}
+
+static void StopOwnedHangChild(Process process, int ownedPid, DateTime startTime)
+{
+    try
+    {
+        if (process.Id == ownedPid && !process.HasExited && process.StartTime == startTime)
+        { process.Kill(); Check(process.WaitForExit(10000), "Owned synthetic child did not exit after test cleanup."); }
+    }
+    finally { process.Dispose(); }
+}
+
+static void UnconfirmedChildBlocksMutations()
+{
+    using var fixture = SyntheticFixture.Create();
+    var engine = new SessionEngine(fixture);
+    var (plan, target) = ExistingPendingPlan(fixture, engine);
+    using var cancellation = new CancellationTokenSource();
+    engine.BoundaryForTest = stage => { if (stage == "child_started") cancellation.Cancel(); };
+    var second = engine.Run(Child(fixture, "hang"), cancellation.Token);
+    engine.BoundaryForTest = null;
+    var child = OwnedHangChild(fixture, second.ChildProcessId);
+    int pid = child.Id;
+    DateTime started = child.StartTime;
+    try
+    {
+        Check(second.BlastStatus == "interrupted" && second.ChildExitCode is null && !child.HasExited,
+            "Cancelled direct child was not observed alive after Run returned.");
+        AssertBlockedMutations(engine, fixture, plan, target);
+    }
+    finally { StopOwnedHangChild(child, pid, started); }
+}
+
+static void TerminatedWrapperBlocksMutations()
+{
+    using var fixture = SyntheticFixture.Create();
+    var engine = new SessionEngine(fixture);
+    var (plan, target) = ExistingPendingPlan(fixture, engine);
+    using var wrapper = Worker("run-worker", fixture);
+    Process? child = null;
+    try
+    {
+        Check(SpinWait.SpinUntil(() => File.Exists(Path.Combine(fixture.StateDirectory,
+            "wrapper-running.signal")), TimeSpan.FromSeconds(10)), "Wrapper did not reach durable running.");
+        child = OwnedHangChild(fixture);
+        wrapper.Kill();
+        Check(wrapper.WaitForExit(10000), "Test wrapper did not terminate.");
+        using (engine.State.AcquireLock()) engine.State.AuditUnresolved();
+        Check(!child.HasExited, "Direct child exited before post-audit mutation test.");
+        AssertBlockedMutations(engine, fixture, plan, target);
+    }
+    finally
+    {
+        if (!wrapper.HasExited) { wrapper.Kill(); wrapper.WaitForExit(10000); }
+        if (child is not null) StopOwnedHangChild(child, child.Id, child.StartTime);
+    }
+}
+
+static void RunningSaveFailureBlocksMutations()
+{
+    using var fixture = SyntheticFixture.Create();
+    var engine = new SessionEngine(fixture);
+    var (plan, target) = ExistingPendingPlan(fixture, engine);
+    StateStore.BeforeSessionSaveForTest = session =>
+    {
+        if (session.Status == "running") throw new IOException("Synthetic running-state write failure.");
+    };
+    RunResult second;
+    try { second = engine.Run(Child(fixture, "hang")); }
+    finally { StateStore.BeforeSessionSaveForTest = null; }
+    var child = OwnedHangChild(fixture, second.ChildProcessId);
+    int pid = child.Id;
+    DateTime started = child.StartTime;
+    try
+    {
+        Check(second.WrapperExitCode == 70 && second.ChildExitCode is null && !child.HasExited,
+            "Running-state save failure did not preserve uncertain child result.");
+        AssertBlockedMutations(engine, fixture, plan, target);
+    }
+    finally { StopOwnedHangChild(child, pid, started); }
+}
+
+static void PrelaunchDurableFailurePreventsStart()
+{
+    using var fixture = SyntheticFixture.Create();
+    var engine = new SessionEngine(fixture);
+    int failures = 0;
+    StateStore.BeforeSessionSaveForTest = session =>
+    {
+        if (session.Status == "launch_pending")
+        { failures++; throw new IOException("Synthetic prelaunch durable failure."); }
+    };
+    RunResult first;
+    try { first = engine.Run(Child(fixture, "mark")); }
+    finally { StateStore.BeforeSessionSaveForTest = null; }
+    Check(failures == 1 && first.WrapperExitCode == 70 && first.ChildProcessId is null &&
+          !File.Exists(Path.Combine(fixture.StateDirectory, "child-started.signal")),
+        "Command started without a durable auditable prelaunch state.");
+    var second = engine.Run(Child(fixture, "mark-next"));
+    Check(second.BlastStatus == "ok" &&
+          File.Exists(Path.Combine(fixture.StateDirectory, "next-child-started.signal")),
+        "Confirmed prelaunch failure incorrectly blocked a later run.");
+}
+
+static void BaselineCancellationPermitsLaterRun()
+{
+    using var fixture = SyntheticFixture.Create();
+    var engine = new SessionEngine(fixture);
+    using var cancellation = new CancellationTokenSource();
+    engine.BoundaryForTest = stage => { if (stage == "before_baseline") cancellation.Cancel(); };
+    var first = engine.Run(Child(fixture, "mark"), cancellation.Token);
+    engine.BoundaryForTest = null;
+    var second = engine.Run(Child(fixture, "mark-next"));
+    Check(first.BlastStatus == "interrupted" && first.ChildProcessId is null &&
+          second.BlastStatus == "ok" && File.Exists(Path.Combine(fixture.StateDirectory,
+              "next-child-started.signal")), "Baseline cancellation created a phantom live-child block.");
+}
+
+static void ConfirmedCompletionPermitsLaterRun()
+{
+    using var fixture = SyntheticFixture.Create();
+    var engine = new SessionEngine(fixture);
+    var first = engine.Run(Child(fixture, "mark"));
+    var second = engine.Run(Child(fixture, "mark-next"));
+    Check(first.BlastStatus == "ok" && second.BlastStatus == "ok" &&
+          File.Exists(Path.Combine(fixture.StateDirectory, "next-child-started.signal")),
+        "Confirmed completed direct child prevented a later run.");
+}
+
+static void RealSqliteDoubleFailure()
+{
+    using var fixture = SyntheticFixture.Create();
+    var engine = new SessionEngine(fixture);
+    var (plan, target) = ExistingPendingPlan(fixture, engine);
+    var state = engine.State;
+    using (var connection = new SqliteConnection($"Data Source={state.DatabasePathForTest};Pooling=False"))
+    {
+        connection.Open();
+        using var trigger = connection.CreateCommand();
+        trigger.CommandText = """
+            CREATE TRIGGER reject_terminal_session BEFORE UPDATE OF status ON sessions
+            WHEN NEW.status IN ('complete','incomplete')
+            BEGIN SELECT RAISE(ABORT, 'synthetic terminal SQLite write rejection'); END;
+            """;
+        trigger.ExecuteNonQuery();
+    }
+    var start = new ProcessStartInfo(Environment.ProcessPath!)
+    { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+    start.ArgumentList.Add("sqlite-failure-wrapper");
+    start.ArgumentList.Add(fixture.DirectoryPath);
+    start.ArgumentList.Add(fixture.WorkerToken);
+    using var wrapper = Process.Start(start) ?? throw new IOException("SQLite failure wrapper did not start.");
+    string output = wrapper.StandardOutput.ReadToEnd();
+    string error = wrapper.StandardError.ReadToEnd();
+    Check(wrapper.WaitForExit(10000), "SQLite failure wrapper did not exit.");
+    Check(wrapper.ExitCode == 70 && output.Contains("child=23") &&
+          output.Contains("diagnostic_persisted=False") &&
+          output.Contains("terminal_save_attempts=2") && output.Contains("SqliteException"),
+        "Actual SQLite double failure did not reach shared error result: " + error + output);
+    using (var connection = new SqliteConnection($"Data Source={state.DatabasePathForTest};Pooling=False"))
+    {
+        connection.Open();
+        using var drop = connection.CreateCommand();
+        drop.CommandText = "DROP TRIGGER reject_terminal_session;";
+        drop.ExecuteNonQuery();
+    }
+    using (state.AcquireLock()) state.AuditUnresolved();
+    var session = state.SessionIdsForTest().Select(state.LoadSession).Single(x => x.ChildExitCode == 23);
+    Check(session.Status == "interrupted" && session.ChildExitCode == 23 &&
+          session.InterruptionReason == "unfinished_on_restart_from_finalizing" &&
+          state.HasUnresolvedRuns(), "SQLite recovery audit lost incomplete result.");
+    AssertBlockedMutations(engine, fixture, plan, target);
+    Console.WriteLine("EXIT_TRIPLE child=23 wrapper_process=70 test_executor=pass; diagnostic_persisted=false");
 }
 
 static void AbnormalChildExit()

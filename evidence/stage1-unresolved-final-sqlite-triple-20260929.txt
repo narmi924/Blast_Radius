@@ -1,0 +1,5 @@
+BLOCK_EVIDENCE new_child_started=false apply_operations=0 target=after
+EXIT_TRIPLE child=23 wrapper_process=70 test_executor=pass; diagnostic_persisted=false
+PASS real SQLite double failure returns wrapper error
+RESULT: Passed=1 Failed=0 Skipped=0 Blocked=0
+TEST_EXIT=0

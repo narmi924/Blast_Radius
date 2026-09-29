@@ -146,6 +146,30 @@ internal sealed class StateStore
         return Convert.ToInt64(command.ExecuteScalar()) != 0;
     }
 
+    // A PID may have been reused, and a failed process query says nothing about the
+    // original child. Only a durable, successful completion clears this barrier.
+    internal bool HasUnresolvedRuns()
+    {
+        using var connection = Open();
+        using var command = Command(connection, "SELECT payload FROM sessions WHERE status<>'complete';");
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var session = JsonSerializer.Deserialize<SessionRecord>(reader.GetString(0), JsonOptions)
+                ?? throw new InvalidDataException("Invalid session record during run audit.");
+            if (session.ChildLaunchState == "not_started") continue;
+            if (session.ChildLaunchState is "possible" or "exited") return true;
+            // Older records lack ChildLaunchState. A historical ready/running window
+            // cannot prove that Process.Start was never reached.
+            if (session.ChildProcessId is not null || session.ChildExitCode is not null ||
+                session.Status is "ready" or "launch_pending" or "running" or "finalizing" ||
+                session.InterruptionReason is "unfinished_on_restart_from_ready" or
+                    "unfinished_on_restart_from_running" or "unfinished_on_restart_from_finalizing")
+                return true;
+        }
+        return false;
+    }
+
     internal bool HasStoredRecords()
     {
         using var connection = Open();
@@ -276,7 +300,7 @@ internal sealed class StateStore
         List<string> sessionIds = [];
         using (var connection = Open())
         using (var command = Command(connection,
-            "SELECT id FROM sessions WHERE status IN ('baselining','ready','running','finalizing');"))
+            "SELECT id FROM sessions WHERE status IN ('baselining','ready','launch_pending','running','finalizing');"))
         using (var reader = command.ExecuteReader())
             while (reader.Read()) sessionIds.Add(reader.GetString(0));
         foreach (string id in sessionIds)

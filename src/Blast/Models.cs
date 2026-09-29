@@ -51,6 +51,8 @@ internal sealed class SessionRecord
     public required string Status { get; set; }
     public int? ChildExitCode { get; set; }
     public int? ChildProcessId { get; set; }
+    // Null is a legacy record with no durable launch evidence. Never infer safety from a PID alone.
+    public string? ChildLaunchState { get; set; }
     public DateTimeOffset? FinalScanCompletedUtc { get; set; }
     public int CancelRequests { get; set; }
     public string ConsoleControlMode { get; set; } = "unknown";
@@ -119,7 +121,8 @@ internal sealed record PlanExecutionPayload(
 internal sealed record ApplyResult(string Status, int OperationsApplied, IReadOnlyList<RestoreOperation> Operations);
 
 internal sealed record RunResult(string SessionId, string BlastStatus, int? ChildExitCode,
-    int? ChildProcessId = null, int CancelRequests = 0, string ConsoleControlMode = "unknown")
+    int? ChildProcessId = null, int CancelRequests = 0, string ConsoleControlMode = "unknown",
+    bool DiagnosticPersisted = true, string? Error = null)
 {
     // Callers must also inspect BlastStatus; child and Blast integer codes may collide.
     internal int WrapperExitCode => BlastStatus == "ok" && ChildExitCode is int code ? code : 70;
