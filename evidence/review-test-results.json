@@ -1,0 +1,326 @@
+[
+  {
+    "name": "ntfs primitives",
+    "status": "Passed"
+  },
+  {
+    "name": "modified file full chain and idempotence",
+    "status": "Passed"
+  },
+  {
+    "name": "modified file conflict",
+    "status": "Passed"
+  },
+  {
+    "name": "equal content with changed identity conflicts",
+    "status": "Passed"
+  },
+  {
+    "name": "new file removal and safety copy",
+    "status": "Passed"
+  },
+  {
+    "name": "zero-byte new file is present",
+    "status": "Passed"
+  },
+  {
+    "name": "new file conflict",
+    "status": "Passed"
+  },
+  {
+    "name": "deleted file recovery",
+    "status": "Passed"
+  },
+  {
+    "name": "deleted path occupied",
+    "status": "Passed"
+  },
+  {
+    "name": "simple rename recovery",
+    "status": "Passed"
+  },
+  {
+    "name": "rename source occupied",
+    "status": "Passed"
+  },
+  {
+    "name": "missing baseline object",
+    "status": "Passed"
+  },
+  {
+    "name": "corrupt baseline object",
+    "status": "Passed"
+  },
+  {
+    "name": "corrupt safety object blocks mutation",
+    "status": "Passed"
+  },
+  {
+    "name": "name exchange is unsupported",
+    "status": "Passed"
+  },
+  {
+    "name": "missing parent is unknown",
+    "status": "Passed"
+  },
+  {
+    "name": "fake token never enters persistent plaintext",
+    "status": "Passed"
+  },
+  {
+    "name": "new token safety copy stays encrypted",
+    "status": "Passed"
+  },
+  {
+    "name": "move into excluded path stays outside coverage",
+    "status": "Passed"
+  },
+  {
+    "name": "Git index and prior dirt are preserved",
+    "status": "Passed"
+  },
+  {
+    "name": "partial failure is in doubt",
+    "status": "Passed"
+  },
+  {
+    "name": "cross-process state lock and termination",
+    "status": "Passed"
+  },
+  {
+    "name": "two processes apply same plan",
+    "status": "Passed"
+  },
+  {
+    "name": "crash after intent is audited",
+    "status": "Passed"
+  },
+  {
+    "name": "crash after safety copy is audited",
+    "status": "Passed"
+  },
+  {
+    "name": "crash after target mutation is audited",
+    "status": "Passed"
+  },
+  {
+    "name": "executor retains parent guard through verification",
+    "status": "Passed"
+  },
+  {
+    "name": "audited intent blocks a new plan",
+    "status": "Passed"
+  },
+  {
+    "name": "required read failure blocks child launch",
+    "status": "Passed"
+  },
+  {
+    "name": "unsupported required file blocks child launch",
+    "status": "Passed"
+  },
+  {
+    "name": "final read failure is unknown",
+    "status": "Passed"
+  },
+  {
+    "name": "explicit external file and directory restore",
+    "status": "Passed"
+  },
+  {
+    "name": "external file deletion restore",
+    "status": "Passed"
+  },
+  {
+    "name": "scope IDs separate identical relative paths",
+    "status": "Passed"
+  },
+  {
+    "name": "state inside protected scope is rejected",
+    "status": "Passed"
+  },
+  {
+    "name": "associated group requires complete selection",
+    "status": "Passed"
+  },
+  {
+    "name": "whole group preflight conflict executes zero",
+    "status": "Passed"
+  },
+  {
+    "name": "failure after first verified operation reports partial",
+    "status": "Passed"
+  },
+  {
+    "name": "crash after reused safety object before reference is audited",
+    "status": "Passed"
+  },
+  {
+    "name": "R6 new encrypted object before publish crash",
+    "status": "Passed"
+  },
+  {
+    "name": "R6 new encrypted object after publish crash",
+    "status": "Passed"
+  },
+  {
+    "name": "R6 new encrypted temporary file creation crash",
+    "status": "Passed"
+  },
+  {
+    "name": "R6 new encrypted object verification crash",
+    "status": "Passed"
+  },
+  {
+    "name": "crash after plan commit keeps fixed plan",
+    "status": "Passed"
+  },
+  {
+    "name": "crash after verification is audited",
+    "status": "Passed"
+  },
+  {
+    "name": "binary file restore",
+    "status": "Passed"
+  },
+  {
+    "name": "exe wrapper preserves arguments stdin stdout exit",
+    "status": "Passed"
+  },
+  {
+    "name": "cmd wrapper preserves space arguments and exit",
+    "status": "Passed"
+  },
+  {
+    "name": "cmd quote argument is rejected before launch",
+    "status": "Passed"
+  },
+  {
+    "name": "abnormal child exit remains reportable",
+    "status": "Passed"
+  },
+  {
+    "name": "missing safety after restart blocks new apply",
+    "status": "Passed"
+  },
+  {
+    "name": "parent move at durable intent blocks mutation",
+    "status": "Passed"
+  },
+  {
+    "name": "target replacement during verification is blocked",
+    "status": "Passed"
+  },
+  {
+    "name": "corrupt baseline before ready blocks child",
+    "status": "Passed"
+  },
+  {
+    "name": "overwrite rename is not split into independent changes",
+    "status": "Passed"
+  },
+  {
+    "name": "coverage persists four separate buckets and rule version",
+    "status": "Passed"
+  },
+  {
+    "name": "ordinary CLI run remains closed",
+    "status": "Passed"
+  },
+  {
+    "name": "R1 hard link after intent rejects without alias write",
+    "status": "Passed"
+  },
+  {
+    "name": "R2 changed target object invalidates confirmed plan",
+    "status": "Passed"
+  },
+  {
+    "name": "R2 changed scope invalidates confirmed plan",
+    "status": "Passed"
+  },
+  {
+    "name": "R3 baseline ADS blocks child",
+    "status": "Passed"
+  },
+  {
+    "name": "R3 ADS added before apply blocks mutation",
+    "status": "Passed"
+  },
+  {
+    "name": "R4 recreated root rejects deleted file restore",
+    "status": "Passed"
+  },
+  {
+    "name": "R4 recreated nested parent rejects restore",
+    "status": "Passed"
+  },
+  {
+    "name": "R5 same-content replacement cannot be verified",
+    "status": "Passed"
+  },
+  {
+    "name": "R1 final attribute change rejects modification",
+    "status": "Passed"
+  },
+  {
+    "name": "R1 hard link blocks added-file removal",
+    "status": "Passed"
+  },
+  {
+    "name": "R1 hard link blocks rename restoration",
+    "status": "Passed"
+  },
+  {
+    "name": "R1 capture rejects leaf symlink swap",
+    "status": "Blocked"
+  },
+  {
+    "name": "R1 capture rejects hard-link leaf swap",
+    "status": "Passed"
+  },
+  {
+    "name": "R2 changed operation kind invalidates plan",
+    "status": "Passed"
+  },
+  {
+    "name": "R2 interrupted audit uses confirmed path",
+    "status": "Passed"
+  },
+  {
+    "name": "R3 ADS on added file blocks removal",
+    "status": "Passed"
+  },
+  {
+    "name": "R3 stream query failure is unknown",
+    "status": "Passed"
+  },
+  {
+    "name": "R4 recreated external directory is incomplete",
+    "status": "Passed"
+  },
+  {
+    "name": "R4 empty directory history is preserved",
+    "status": "Passed"
+  },
+  {
+    "name": "R4 newly added directory is unsupported",
+    "status": "Passed"
+  },
+  {
+    "name": "R4 new directory does not receive invented absent baseline",
+    "status": "Passed"
+  },
+  {
+    "name": "R4 root replacement before apply conflicts",
+    "status": "Passed"
+  },
+  {
+    "name": "missing object key preserves existing store",
+    "status": "Passed"
+  },
+  {
+    "name": "report separates supported kind from object integrity and apply state",
+    "status": "Passed"
+  }
+]

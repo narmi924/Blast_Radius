@@ -1,0 +1,90 @@
+PROBE PASS: read-only parent handle allowed rename; DELETE-access guard blocked it; handle rename/delete passed on local NTFS.
+PASS ntfs primitives
+PASS modified file full chain and idempotence
+PASS modified file conflict
+PASS equal content with changed identity conflicts
+PASS new file removal and safety copy
+PASS zero-byte new file is present
+PASS new file conflict
+PASS deleted file recovery
+PASS deleted path occupied
+PASS simple rename recovery
+PASS rename source occupied
+PASS missing baseline object
+PASS corrupt baseline object
+PASS corrupt safety object blocks mutation
+PASS name exchange is unsupported
+PASS missing parent is unknown
+PASS fake token never enters persistent plaintext
+PASS new token safety copy stays encrypted
+PASS move into excluded path stays outside coverage
+PASS Git index and prior dirt are preserved
+PASS partial failure is in doubt
+PASS cross-process state lock and termination
+worker: verified; verified=1
+PASS two processes apply same plan
+PASS crash after intent is audited
+PASS crash after safety copy is audited
+PASS crash after target mutation is audited
+PASS executor retains parent guard through verification
+PASS audited intent blocks a new plan
+PASS required read failure blocks child launch
+PASS unsupported required file blocks child launch
+PASS final read failure is unknown
+PASS explicit external file and directory restore
+PASS external file deletion restore
+PASS scope IDs separate identical relative paths
+PASS state inside protected scope is rejected
+PASS associated group requires complete selection
+PASS whole group preflight conflict executes zero
+PASS failure after first verified operation reports partial
+PASS crash after reused safety object before reference is audited
+PASS R6 new encrypted object before publish crash
+PASS R6 new encrypted object after publish crash
+PASS R6 new encrypted temporary file creation crash
+PASS R6 new encrypted object verification crash
+PASS crash after plan commit keeps fixed plan
+PASS crash after verification is audited
+PASS binary file restore
+PASS exe wrapper preserves arguments stdin stdout exit
+PASS cmd wrapper preserves space arguments and exit
+PASS cmd quote argument is rejected before launch
+Process terminated.
+Synthetic child failure.
+   at System.Environment.FailFast(System.Runtime.CompilerServices.StackCrawlMarkHandle, System.String, System.Runtime.CompilerServices.ObjectHandleOnStack, System.String)
+   at System.Environment.FailFast(System.Threading.StackCrawlMark ByRef, System.String, System.Exception, System.String)
+   at System.Environment.FailFast(System.String)
+   at Program.<Main>$(System.String[])
+PASS abnormal child exit remains reportable
+PASS missing safety after restart blocks new apply
+PASS parent move at durable intent blocks mutation
+PASS target replacement during verification is blocked
+PASS corrupt baseline before ready blocks child
+PASS overwrite rename is not split into independent changes
+PASS coverage persists four separate buckets and rule version
+PASS ordinary CLI run remains closed
+PASS R1 hard link after intent rejects without alias write
+PASS R2 changed target object invalidates confirmed plan
+PASS R2 changed scope invalidates confirmed plan
+PASS R3 baseline ADS blocks child
+PASS R3 ADS added before apply blocks mutation
+PASS R4 recreated root rejects deleted file restore
+PASS R4 recreated nested parent rejects restore
+PASS R5 same-content replacement cannot be verified
+PASS R1 final attribute change rejects modification
+PASS R1 hard link blocks added-file removal
+PASS R1 hard link blocks rename restoration
+BLOCKED R1 capture rejects leaf symlink swap: Non-elevated symlink creation unavailable: IOException
+PASS R1 capture rejects hard-link leaf swap
+PASS R2 changed operation kind invalidates plan
+PASS R2 interrupted audit uses confirmed path
+PASS R3 ADS on added file blocks removal
+PASS R3 stream query failure is unknown
+PASS R4 recreated external directory is incomplete
+PASS R4 empty directory history is preserved
+PASS R4 newly added directory is unsupported
+PASS R4 new directory does not receive invented absent baseline
+PASS R4 root replacement before apply conflicts
+PASS missing object key preserves existing store
+PASS report separates supported kind from object integrity and apply state
+RESULT: Passed=80 Failed=0 Skipped=0 Blocked=1

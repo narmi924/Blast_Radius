@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+.vs/
+tmp/
+*.zip
+.env
+.env.*
+**/objects/
+**/fixture.token
+**/*.sqlite
+**/*.sqlite-*
+**/*.db
+**/*.db-*
+**/*.key

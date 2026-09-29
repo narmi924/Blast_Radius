@@ -1,0 +1,37 @@
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL R1 hard link after intent rejects without alias write: System.Exception: Recovery changed a now multi-linked target or alias.
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R1HardLinkAtIntent|0_70() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1304
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
+FAIL R2 changed target object invalidates confirmed plan: System.Exception: Confirmed plan executed a newly substituted baseline object.
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R2ChangedTargetObject|0_71() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1330
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
+FAIL R2 changed scope invalidates confirmed plan: System.Exception: Confirmed plan ignored a changed scope definition.
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R2ChangedScope|0_72() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1344
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
+RESULT: Passed=0 Failed=2 Skipped=0 Blocked=0
+FAIL R3 baseline ADS blocks child: System.Exception: ADS was classified as a complete required baseline.
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R3BaselineAds|0_73() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1358
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
+FAIL R3 ADS added before apply blocks mutation: System.Exception: Recovery modified a file after an ADS appeared.
+RESULT: Passed=0 Failed=2 Skipped=0 Blocked=0
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R3AdsBeforeApply|0_74() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1376
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
+FAIL R4 recreated root rejects deleted file restore: System.Exception: Recreated root produced an executable ordinary deletion.
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R4RecreatedRoot|0_75() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1395
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
+FAIL R4 recreated nested parent rejects restore: System.Exception: Recreated parent produced an executable ordinary deletion.
+RESULT: Passed=0 Failed=2 Skipped=0 Blocked=0
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R4RecreatedParent|0_76() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1420
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
+RESULT: Passed=0 Failed=1 Skipped=0 Blocked=0
+FAIL R5 same-content replacement cannot be verified: System.Exception: Same-content substitute was accepted as the created restore object.
+   at Program.<<Main>$>g__Check|0_78(Boolean condition, String message) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1451
+   at Program.<<Main>$>g__R5SameContentReplacement|0_77() in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 1442
+   at Program.<<Main>$>g__All|0_8(String filter) in E:\Projects\Kaspi\Blast_Radius\tests\Blast.Tests\Program.cs:line 265
